@@ -61,3 +61,10 @@ def search_posts(provincia: str, sport: str, db: Session = Depends(get_db)):
     if not posts:
         raise HTTPException(status_code=404, detail="Nessun post trovato per i criteri specificati")
     return posts
+
+@app.get("/posts/{post_id}", response_model=PostResponse)
+def get_post(post_id: int, db: Session = Depends(get_db)):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post non trovato")
+    return post

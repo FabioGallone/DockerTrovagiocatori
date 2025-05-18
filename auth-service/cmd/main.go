@@ -41,6 +41,8 @@ func main() {
 	http.HandleFunc("/images/", handlers.ServeProfilePicture)
 	http.HandleFunc("/api/user", handlers.UserHandler(database, sm))
 
+	http.HandleFunc("/api/user/by-email", handlers.GetUserByEmailHandler(database, sm))
+
 	log.Println("Auth service running on port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)

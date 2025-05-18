@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -207,5 +208,38 @@ func UserHandler(database *db.Database, sm *sessions.SessionManager) http.Handle
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func GetUserByEmailHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Estrazione email
+		email := r.URL.Query().Get("email")
+		if email == "" {
+			http.Error(w, "Email parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		// Query al database
+		var user models.User
+		err := database.Conn.QueryRow(`
+            SELECT id, nome, cognome, username, email, profile_picture 
+            FROM users 
+            WHERE email = $1`, email).Scan(
+			&user.ID, &user.Nome, &user.Cognome, &user.Username, &user.Email, &user.ProfilePic,
+		)
+
+		switch {
+		case err == sql.ErrNoRows:
+			http.Error(w, "User not found", http.StatusNotFound)
+		case err != nil:
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		default:
+			log.Println("ProfilePic:", user.ProfilePic)
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(user)
+		}
 	}
 }
