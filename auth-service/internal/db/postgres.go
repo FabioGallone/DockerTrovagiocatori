@@ -102,3 +102,31 @@ func (db *Database) GetUserProfile(userID string) (models.User, error) {
 	}
 	return user, nil
 }
+
+func (d *Database) VerifyCurrentPassword(userID int64, currentPassword string) (bool, error) {
+	var hashedPassword string
+	err := d.Conn.QueryRow(
+		"SELECT password FROM users WHERE id = $1",
+		userID,
+	).Scan(&hashedPassword)
+
+	if err != nil {
+		return false, err
+	}
+
+	return checkPasswordHash(currentPassword, hashedPassword), nil
+}
+
+func (d *Database) UpdateUserPassword(userID int64, newPassword string) error {
+	hashedPassword, err := hashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	_, err = d.Conn.Exec(
+		"UPDATE users SET password = $1 WHERE id = $2",
+		hashedPassword,
+		userID,
+	)
+	return err
+}
