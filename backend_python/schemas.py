@@ -1,5 +1,6 @@
 from pydantic import BaseModel, validator
 from datetime import datetime, date, time
+from typing import List, Optional
 
 class PostCreate(BaseModel):
     titolo: str
@@ -28,9 +29,28 @@ class PostCreate(BaseModel):
                     raise ValueError("data_partita deve essere nel formato dd-MM-yyyy oppure yyyy-MM-dd")
         return v
 
+# Schema per creare un commento
+class CommentCreate(BaseModel):
+    contenuto: str
+
+# Schema per la risposta del commento
+class CommentResponse(BaseModel):
+    id: int
+    post_id: int
+    autore_email: str
+    contenuto: str
+    created_at: datetime
+    autore_username: Optional[str] = None
+    autore_nome: Optional[str] = None
+    autore_cognome: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
 class PostResponse(PostCreate):
     id: int
     autore_email: str
+    comments: Optional[List[CommentResponse]] = []
 
     class Config:
         # Se usi Pydantic v1, usa orm_mode

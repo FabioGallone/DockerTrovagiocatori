@@ -4,12 +4,12 @@ services:
     container_name: my_postgres_container
     restart: always
     environment:
-      POSTGRES_USER: APG         # Nuovo utente del database
-      POSTGRES_PASSWORD: 123ciao # Nuova password
-      POSTGRES_DB: ProgCarc      # Nuovo nome del database
+      POSTGRES_USER: APG
+      POSTGRES_PASSWORD: 123ciao
+      POSTGRES_DB: ProgCarc
     volumes:
       - ./internal/db/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - pgdata:/var/lib/postgresql/data # Persistenza dei dati
+      - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
@@ -17,31 +17,31 @@ services:
     build: ./auth-service
     container_name: my_auth_service
     ports:
-      - "8080:8080"
+      - "8080:8080"  # Porta esposta per comunicare con il frontend
     environment:
-      DB_HOST: db                       # Host del database (stesso nome del servizio)
-      DB_USER: APG                      # Deve corrispondere a POSTGRES_USER
-      DB_PASSWORD: 123ciao              # Deve corrispondere a POSTGRES_PASSWORD
-      DB_NAME: ProgCarc                 # Deve corrispondere a POSTGRES_DB
+      DB_HOST: db
+      DB_USER: APG
+      DB_PASSWORD: 123ciao
+      DB_NAME: ProgCarc
     depends_on:
       - db
     volumes:
-      - ./uploads:/app/uploads          # Mappa la cartella uploads sulla macchina locale
+      - ./uploads:/app/uploads
     restart: always
 
   backend_python:
-    build: ./backend_python             # Assicurati che questa cartella contenga il Dockerfile e il codice Python
+    build: ./backend_python
     container_name: my_backend_python
     ports:
-      - "8000:8000"                     # Espone la porta 8000 per FastAPI/Uvicorn
+      - "8000:8000"  # Porta esposta per comunicare con il frontend
     environment:
-      DB_HOST: db                       # Deve corrispondere al servizio 'db'
-      DB_USER: APG                      # Deve corrispondere a POSTGRES_USER
-      DB_PASSWORD: 123ciao              # Deve corrispondere a POSTGRES_PASSWORD
-      DB_NAME: ProgCarc                 # Deve corrispondere a POSTGRES_DB
+      DB_HOST: db
+      DB_USER: APG
+      DB_PASSWORD: 123ciao
+      DB_NAME: ProgCarc
     depends_on:
       - db
     restart: always
 
 volumes:
-  pgdata:                                # Volume per la persistenza dei dati PostgreSQL
+  pgdata:

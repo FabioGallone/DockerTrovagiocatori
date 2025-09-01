@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, Date, Time
+from sqlalchemy import Column, Integer, String, Date, Time, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
 from database import Base
+from datetime import datetime
 
 class Post(Base):
     __tablename__ = "posts"
@@ -13,3 +15,18 @@ class Post(Base):
     ora_partita = Column(Time, nullable=False)
     commento = Column(String, nullable=True)
     autore_email = Column(String, nullable=False)  # Collegato all'utente autenticato
+    
+    # Relazione con i commenti
+    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
+    autore_email = Column(String, nullable=False)
+    contenuto = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relazione con il post
+    post = relationship("Post", back_populates="comments")
