@@ -1,10 +1,10 @@
-from sqlalchemy import Column, Integer, String, Date, Time, DateTime, ForeignKey, Text, Float
+from sqlalchemy import Column, Integer, String, Date, Time, DateTime, ForeignKey, Text, Float, JSON
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
 
-class FootballField(Base):
-    __tablename__ = "football_fields"
+class SportField(Base):
+    __tablename__ = "sport_fields"
 
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
@@ -13,8 +13,9 @@ class FootballField(Base):
     citta = Column(String, nullable=False)
     lat = Column(Float, nullable=False)
     lng = Column(Float, nullable=False)
-    tipo = Column(String, nullable=True)  # "Sintetico", "Erba naturale", etc.
+    tipo = Column(String, nullable=True)  # "Sintetico", "Erba naturale", "Terra battuta", etc.
     descrizione = Column(Text, nullable=True)
+    sports_disponibili = Column(JSON, nullable=True)  # Lista di sport supportati
 
 class Post(Base):
     __tablename__ = "posts"
@@ -28,12 +29,12 @@ class Post(Base):
     ora_partita = Column(Time, nullable=False)
     commento = Column(String, nullable=True)
     autore_email = Column(String, nullable=False)
-    # Nuovo campo per il campo da calcio selezionato
-    campo_id = Column(Integer, ForeignKey("football_fields.id"), nullable=True)
+    # Campo da calcio selezionato (ora rinominato più genericamente)
+    campo_id = Column(Integer, ForeignKey("sport_fields.id"), nullable=True)
     
     # Relazioni
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
-    campo = relationship("FootballField")
+    campo = relationship("SportField")
 
 class Comment(Base):
     __tablename__ = "comments"

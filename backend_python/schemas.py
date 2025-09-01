@@ -2,7 +2,7 @@ from pydantic import BaseModel, validator
 from datetime import datetime, date, time
 from typing import List, Optional
 
-class FootballFieldResponse(BaseModel):
+class SportFieldResponse(BaseModel):
     id: int
     nome: str
     indirizzo: str
@@ -12,6 +12,7 @@ class FootballFieldResponse(BaseModel):
     lng: float
     tipo: Optional[str] = None
     descrizione: Optional[str] = None
+    sports_disponibili: Optional[List[str]] = []
 
     class Config:
         orm_mode = True
@@ -24,7 +25,7 @@ class PostCreate(BaseModel):
     data_partita: date
     ora_partita: time
     commento: str
-    campo_id: Optional[int] = None  #campo opzionale per il campo da calcio
+    campo_id: Optional[int] = None  # Campo sportivo selezionato
 
     @validator('data_partita', pre=True)
     def parse_data_partita(cls, v):
@@ -65,7 +66,7 @@ class PostResponse(BaseModel):
     commento: str
     autore_email: str
     campo_id: Optional[int] = None
-    campo: Optional[FootballFieldResponse] = None  # Informazioni complete del campo
+    campo: Optional[SportFieldResponse] = None  # Informazioni complete del campo sportivo
     comments: Optional[List[CommentResponse]] = []
 
     class Config:
