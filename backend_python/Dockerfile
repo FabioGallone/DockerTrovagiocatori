@@ -13,6 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copia tutto il codice sorgente dell'app nel container
 COPY . .
 
+# Copia il file dei campi da calcio
+COPY campi_calcio.json .
+
 # Esponi la porta 8000 per il server FastAPI
 EXPOSE 8000
 

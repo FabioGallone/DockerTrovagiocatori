@@ -1,0 +1,134 @@
+[
+  {
+    "id": 1,
+    "nome": "Centro Sportivo San Siro",
+    "indirizzo": "Via dei Campi 15, Milano",
+    "provincia": "Milano",
+    "citta": "Milano",
+    "lat": 45.4784,
+    "lng": 9.1240,
+    "tipo": "Sintetico",
+    "descrizione": "Campo da calcio a 11 in erba sintetica con spogliatoi"
+  },
+  {
+    "id": 2,
+    "nome": "Polisportiva Centrale",
+    "indirizzo": "Via Roma 32, Milano",
+    "provincia": "Milano", 
+    "citta": "Milano",
+    "lat": 45.4642,
+    "lng": 9.1900,
+    "tipo": "Erba naturale",
+    "descrizione": "Campo principale con tribune e illuminazione"
+  },
+  {
+    "id": 3,
+    "nome": "Campo Sportivo Garibaldi",
+    "indirizzo": "Piazza Garibaldi 8, Bergamo",
+    "provincia": "Bergamo",
+    "citta": "Bergamo", 
+    "lat": 45.6983,
+    "lng": 9.6773,
+    "tipo": "Sintetico",
+    "descrizione": "Campo da calcetto 7vs7 coperto"
+  },
+  {
+    "id": 4,
+    "nome": "Stadio Comunale",
+    "indirizzo": "Via dello Sport 1, Brescia",
+    "provincia": "Brescia",
+    "citta": "Brescia",
+    "lat": 45.5416,
+    "lng": 10.2118,
+    "tipo": "Erba naturale", 
+    "descrizione": "Campo regolamentare con pista d'atletica"
+  },
+  {
+    "id": 5,
+    "nome": "Centro Sportivo Juventus",
+    "indirizzo": "Corso Francia 15, Torino",
+    "provincia": "Torino",
+    "citta": "Torino",
+    "lat": 45.0703,
+    "lng": 7.6869,
+    "tipo": "Sintetico",
+    "descrizione": "Moderno centro sportivo con 3 campi"
+  },
+  {
+    "id": 6,
+    "nome": "Polisportiva Napoli Sud",
+    "indirizzo": "Via Vesuvio 22, Napoli", 
+    "provincia": "Napoli",
+    "citta": "Napoli",
+    "lat": 40.8518,
+    "lng": 14.2681,
+    "tipo": "Erba naturale",
+    "descrizione": "Campo panoramico vista mare"
+  },
+  {
+    "id": 7,
+    "nome": "Campo Trastevere",
+    "indirizzo": "Via di Trastevere 45, Roma",
+    "provincia": "Roma",
+    "citta": "Roma", 
+    "lat": 41.8902,
+    "lng": 12.4696,
+    "tipo": "Sintetico",
+    "descrizione": "Campo nel cuore di Roma con parcheggio"
+  },
+  {
+    "id": 8,
+    "nome": "Stadio San Paolo Mini",
+    "indirizzo": "Via Fuorigrotta 12, Napoli",
+    "provincia": "Napoli", 
+    "citta": "Napoli",
+    "lat": 40.8279,
+    "lng": 14.1934,
+    "tipo": "Erba naturale",
+    "descrizione": "Campo di allenamento adiacente allo stadio"
+  },
+  {
+    "id": 9,
+    "nome": "Centro Calcio Fiorentina",
+    "indirizzo": "Via del Calcio 33, Firenze",
+    "provincia": "Firenze",
+    "citta": "Firenze",
+    "lat": 43.7696,
+    "lng": 11.2558,
+    "tipo": "Sintetico", 
+    "descrizione": "Campo moderno con spogliatoi climatizzati"
+  },
+  {
+    "id": 10,
+    "nome": "Polisportiva Bologna",
+    "indirizzo": "Via Emilia 88, Bologna",
+    "provincia": "Bologna",
+    "citta": "Bologna", 
+    "lat": 44.4949,
+    "lng": 11.3426,
+    "tipo": "Erba naturale",
+    "descrizione": "Campo storico della città con bar interno"
+  },
+  {
+    "id": 11,
+    "nome": "Campo Botta",
+    "indirizzo": "Via Botta, Paternò",
+    "provincia": "Catania",
+    "citta": "Paternò",
+    "lat": 37.5660,
+    "lng": 14.9020,
+    "tipo": "Erba naturale",
+    "descrizione": "Storico campo di Paternò"
+  },
+  {
+    "id": 12,
+    "nome": "Campo Pannitteri",
+    "indirizzo": "Via Pannitteri, Paternò",
+    "provincia": "Catania",
+    "citta": "Paternò",
+    "lat": 37.5655,
+    "lng": 14.9005,
+    "tipo": "Sintetico",
+    "descrizione": "Campo sportivo comunale di Paternò"
+  }
+]

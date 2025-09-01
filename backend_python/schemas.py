@@ -2,38 +2,45 @@ from pydantic import BaseModel, validator
 from datetime import datetime, date, time
 from typing import List, Optional
 
+class FootballFieldResponse(BaseModel):
+    id: int
+    nome: str
+    indirizzo: str
+    provincia: str
+    citta: str
+    lat: float
+    lng: float
+    tipo: Optional[str] = None
+    descrizione: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
 class PostCreate(BaseModel):
     titolo: str
-    provincia: str  # Nuovo campo per provincia
+    provincia: str
     citta: str
-    sport: str      # Nuovo campo per sport
+    sport: str
     data_partita: date
     ora_partita: time
     commento: str
+    campo_id: Optional[int] = None  #campo opzionale per il campo da calcio
 
     @validator('data_partita', pre=True)
     def parse_data_partita(cls, v):
-        """
-        Prova a interpretare la data nel formato dd-MM-yyyy.
-        Se fallisce, tenta il formato ISO (yyyy-MM-dd).
-        """
         if isinstance(v, str):
             try:
-                # Tenta a interpretare dd-MM-yyyy
                 return datetime.strptime(v, "%d-%m-%Y").date()
             except ValueError:
                 try:
-                    # Tenta a interpretare yyyy-MM-dd
                     return datetime.strptime(v, "%Y-%m-%d").date()
                 except ValueError:
                     raise ValueError("data_partita deve essere nel formato dd-MM-yyyy oppure yyyy-MM-dd")
         return v
 
-# Schema per creare un commento
 class CommentCreate(BaseModel):
     contenuto: str
 
-# Schema per la risposta del commento
 class CommentResponse(BaseModel):
     id: int
     post_id: int
@@ -47,13 +54,19 @@ class CommentResponse(BaseModel):
     class Config:
         orm_mode = True
 
-class PostResponse(PostCreate):
+class PostResponse(BaseModel):
     id: int
+    titolo: str
+    provincia: str
+    citta: str
+    sport: str
+    data_partita: date
+    ora_partita: time
+    commento: str
     autore_email: str
+    campo_id: Optional[int] = None
+    campo: Optional[FootballFieldResponse] = None  # Informazioni complete del campo
     comments: Optional[List[CommentResponse]] = []
 
     class Config:
-        # Se usi Pydantic v1, usa orm_mode
         orm_mode = True
-        # Se usi Pydantic v2, puoi invece usare:
-        # from_attributes = True
