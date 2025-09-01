@@ -96,11 +96,15 @@ func RegisterHandler(database *db.Database, sm *sessions.SessionManager) http.Ha
 
 		// Crea una sessione e salva il cookie
 		sessionID, _ := sm.CreateSession(userID)
-		http.SetCookie(w, &http.Cookie{
-			Name:  "session_id",
-			Value: sessionID,
-			Path:  "/",
-		})
+		cookie := &http.Cookie{
+			Name:     "session_id",
+			Value:    sessionID,
+			Path:     "/",
+			MaxAge:   86400 * 7, // 7 giorni
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		}
+		http.SetCookie(w, cookie)
 		fmt.Printf("✔ SessionID: %s\n", sessionID)
 
 		w.WriteHeader(http.StatusCreated)
