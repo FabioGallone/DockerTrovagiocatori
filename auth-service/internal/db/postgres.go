@@ -48,8 +48,23 @@ func migrateDatabase(db *sql.DB) error {
 	);
 	`)
 	if err != nil {
-		return fmt.Errorf("Errore nella creazione del database: %v", err)
+		return fmt.Errorf("errore nella creazione del database: %v", err)
 	}
+
+	// Nuova tabella per i preferiti
+	_, err = db.Exec(`
+	CREATE TABLE IF NOT EXISTS user_favorites (
+		id SERIAL PRIMARY KEY,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		post_id INTEGER NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, post_id)
+	);
+	`)
+	if err != nil {
+		return fmt.Errorf("errore nella creazione della tabella user_favorites: %v", err)
+	}
+
 	fmt.Println("✔ Database migrato con successo!")
 	return nil
 }
@@ -129,4 +144,65 @@ func (d *Database) UpdateUserPassword(userID int64, newPassword string) error {
 		userID,
 	)
 	return err
+}
+
+// NUOVE FUNZIONI PER I PREFERITI
+
+// AddFavorite aggiunge un post ai preferiti dell'utente
+func (db *Database) AddFavorite(userID int64, postID int) error {
+	_, err := db.Conn.Exec(`
+		INSERT INTO user_favorites (user_id, post_id) 
+		VALUES ($1, $2) 
+		ON CONFLICT (user_id, post_id) DO NOTHING`,
+		userID, postID)
+	return err
+}
+
+// RemoveFavorite rimuove un post dai preferiti dell'utente
+func (db *Database) RemoveFavorite(userID int64, postID int) error {
+	_, err := db.Conn.Exec(`
+		DELETE FROM user_favorites 
+		WHERE user_id = $1 AND post_id = $2`,
+		userID, postID)
+	return err
+}
+
+// IsFavorite controlla se un post è nei preferiti dell'utente
+func (db *Database) IsFavorite(userID int64, postID int) (bool, error) {
+	var count int
+	err := db.Conn.QueryRow(`
+		SELECT COUNT(*) FROM user_favorites 
+		WHERE user_id = $1 AND post_id = $2`,
+		userID, postID).Scan(&count)
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// GetUserFavorites restituisce tutti i post ID preferiti di un utente
+func (db *Database) GetUserFavorites(userID int64) ([]int, error) {
+	rows, err := db.Conn.Query(`
+		SELECT post_id FROM user_favorites 
+		WHERE user_id = $1 
+		ORDER BY created_at DESC`,
+		userID)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var favorites []int
+	for rows.Next() {
+		var postID int
+		if err := rows.Scan(&postID); err != nil {
+			return nil, err
+		}
+		favorites = append(favorites, postID)
+	}
+
+	return favorites, rows.Err()
 }
