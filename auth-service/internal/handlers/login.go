@@ -34,15 +34,11 @@ func LoginHandler(database *db.Database, sm *sessions.SessionManager) http.Handl
 
 		// Crea una sessione per l'utente autenticato
 		sessionID, _ := sm.CreateSession(userID)
-		cookie := &http.Cookie{
-			Name:     "session_id",
-			Value:    sessionID,
-			Path:     "/",
-			MaxAge:   86400 * 7, // 7 giorni
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		}
-		http.SetCookie(w, cookie)
+		http.SetCookie(w, &http.Cookie{
+			Name:  "session_id",
+			Value: sessionID,
+			Path:  "/",
+		})
 		fmt.Printf("✔ SessionID: %s\n", sessionID)
 		// Risposta di successo
 		w.WriteHeader(http.StatusOK)
