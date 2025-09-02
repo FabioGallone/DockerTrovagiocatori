@@ -168,8 +168,8 @@ def create_post(post: PostCreate, request: Request, db: Session = Depends(get_db
         commento=post.commento,
         autore_email=user_email,
         campo_id=post.campo_id,
-        livello=post.livello,  # NUOVO CAMPO
-        numero_giocatori=post.numero_giocatori  # NUOVO CAMPO
+        livello=post.livello,  
+        numero_giocatori=post.numero_giocatori 
     )
     
     db.add(new_post)
@@ -179,9 +179,9 @@ def create_post(post: PostCreate, request: Request, db: Session = Depends(get_db
     print(f"[INFO] Post creato con ID: {new_post.id}, livello: {new_post.livello}, giocatori: {new_post.numero_giocatori}")
     return new_post
 
-@app.get("/posts/search", response_model=List[PostResponse])
-def search_posts(provincia: str, sport: str, livello: str = None, db: Session = Depends(get_db)):
-    """Cerca post per provincia, sport e opzionalmente per livello"""
+@app.get("/posts/search", response_model=List[dict])
+def search_posts_with_participants(provincia: str, sport: str, livello: str = None, db: Session = Depends(get_db)):
+    """Cerca post per provincia, sport e opzionalmente per livello, includendo info sui partecipanti"""
     query = db.query(Post).filter(
         Post.provincia == provincia, 
         Post.sport == sport
@@ -196,7 +196,45 @@ def search_posts(provincia: str, sport: str, livello: str = None, db: Session = 
     if not posts:
         raise HTTPException(status_code=404, detail="Nessun post trovato per i criteri specificati")
     
-    return posts
+    # Arricchisce ogni post con informazioni sui partecipanti
+    enriched_posts = []
+    for post in posts:
+        # Ottieni il numero di partecipanti
+        try:
+            response = requests.get(f"http://auth-service:8080/events/{post.id}/participants", timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                participants_count = data.get("count", 0)
+            else:
+                participants_count = 0
+        except Exception as e:
+            print(f"[DEBUG] Errore nel recupero partecipanti per post {post.id}: {e}")
+            participants_count = 0
+        
+        # Crea il dizionario del post con informazioni aggiuntive
+        post_dict = {
+            "id": post.id,
+            "titolo": post.titolo,
+            "provincia": post.provincia,
+            "citta": post.citta,
+            "sport": post.sport,
+            "data_partita": post.data_partita.strftime("%Y-%m-%d"),
+            "ora_partita": post.ora_partita.strftime("%H:%M"),
+            "commento": post.commento,
+            "autore_email": post.autore_email,
+            "campo_id": post.campo_id,
+            "campo": {
+                "nome": post.campo.nome,
+                "indirizzo": post.campo.indirizzo
+            } if post.campo else None,
+            "livello": post.livello,
+            "numero_giocatori": post.numero_giocatori,
+            "partecipanti_iscritti": participants_count,
+            "posti_disponibili": max(0, post.numero_giocatori - participants_count)
+        }
+        enriched_posts.append(post_dict)
+    
+    return enriched_posts
 
 @app.get("/posts/{post_id}", response_model=PostResponse)
 def get_post(post_id: int, db: Session = Depends(get_db)):
@@ -300,6 +338,156 @@ def get_post_comments(post_id: int, db: Session = Depends(get_db)):
             enriched_comments.append(enriched_comment)
     
     return enriched_comments
+
+# ========== ENDPOINT PARTECIPAZIONE EVENTI ==========
+
+@app.get("/posts/{post_id}/participants-count")
+def get_post_participants_count(post_id: int):
+    """Ottiene il numero di partecipanti iscritti a un evento"""
+    try:
+        response = requests.get(f"http://auth-service:8080/events/{post_id}/participants", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "success": True,
+                "post_id": post_id,
+                "participants_count": data.get("count", 0),
+                "participants": data.get("participants", [])
+            }
+        else:
+            return {
+                "success": False,
+                "post_id": post_id,
+                "participants_count": 0,
+                "participants": []
+            }
+    except Exception as e:
+        print(f"[ERROR] Errore nel recupero partecipanti per post {post_id}: {e}")
+        return {
+            "success": False,
+            "post_id": post_id,
+            "participants_count": 0,
+            "participants": []
+        }
+
+@app.get("/posts/{post_id}/availability")
+def get_post_availability(post_id: int, db: Session = Depends(get_db)):
+    """Calcola i posti disponibili per un evento"""
+    # Ottieni il post
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post non trovato")
+    
+    # Ottieni il numero di partecipanti iscritti
+    try:
+        response = requests.get(f"http://auth-service:8080/events/{post_id}/participants", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            participants_count = data.get("count", 0)
+        else:
+            participants_count = 0
+    except Exception as e:
+        print(f"[ERROR] Errore nel recupero partecipanti: {e}")
+        participants_count = 0
+    
+    # Calcola i posti disponibili
+    posti_disponibili = max(0, post.numero_giocatori - participants_count)
+    
+    return {
+        "success": True,
+        "post_id": post_id,
+        "numero_giocatori_richiesti": post.numero_giocatori,
+        "partecipanti_iscritti": participants_count,
+        "posti_disponibili": posti_disponibili,
+        "is_full": posti_disponibili == 0
+    }
+
+# Modifica l'endpoint search_posts per includere informazioni sui partecipanti
+@app.get("/posts/search", response_model=List[PostResponse])
+def search_posts_with_participants(provincia: str, sport: str, livello: str = None, db: Session = Depends(get_db)):
+    """Cerca post per provincia, sport e opzionalmente per livello, includendo info sui partecipanti"""
+    query = db.query(Post).filter(
+        Post.provincia == provincia, 
+        Post.sport == sport
+    )
+    
+    # Filtra per livello se specificato
+    if livello:
+        query = query.filter(Post.livello == livello)
+    
+    posts = query.all()
+    
+    if not posts:
+        raise HTTPException(status_code=404, detail="Nessun post trovato per i criteri specificati")
+    
+    # Arricchisce ogni post con informazioni sui partecipanti
+    enriched_posts = []
+    for post in posts:
+        # Ottieni il numero di partecipanti
+        try:
+            response = requests.get(f"http://auth-service:8080/events/{post.id}/participants", timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                participants_count = data.get("count", 0)
+            else:
+                participants_count = 0
+        except Exception as e:
+            print(f"[DEBUG] Errore nel recupero partecipanti per post {post.id}: {e}")
+            participants_count = 0
+        
+        # Crea una copia del post con informazioni aggiuntive
+        post_dict = {
+            "id": post.id,
+            "titolo": post.titolo,
+            "provincia": post.provincia,
+            "citta": post.citta,
+            "sport": post.sport,
+            "data_partita": post.data_partita,
+            "ora_partita": post.ora_partita,
+            "commento": post.commento,
+            "autore_email": post.autore_email,
+            "campo_id": post.campo_id,
+            "campo": post.campo,
+            "livello": post.livello,
+            "numero_giocatori": post.numero_giocatori,
+            "partecipanti_iscritti": participants_count,
+            "posti_disponibili": max(0, post.numero_giocatori - participants_count)
+        }
+        enriched_posts.append(post_dict)
+    
+    return enriched_posts
+
+# Endpoint per ottenere i dettagli di un singolo post con partecipanti
+@app.get("/posts/{post_id}/details")
+def get_post_with_participants(post_id: int, db: Session = Depends(get_db)):
+    """Ottieni un post specifico con informazioni sui partecipanti"""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post non trovato")
+    
+    # Ottieni informazioni sui partecipanti
+    try:
+        response = requests.get(f"http://auth-service:8080/events/{post_id}/participants", timeout=5)
+        if response.status_code == 200:
+            participants_data = response.json()
+            participants = participants_data.get("participants", [])
+            participants_count = participants_data.get("count", 0)
+        else:
+            participants = []
+            participants_count = 0
+    except Exception as e:
+        print(f"[ERROR] Errore nel recupero partecipanti: {e}")
+        participants = []
+        participants_count = 0
+    
+    # Restituisci il post arricchito con informazioni sui partecipanti
+    return {
+        "post": post,
+        "participants": participants,
+        "participants_count": participants_count,
+        "posti_disponibili": max(0, post.numero_giocatori - participants_count),
+        "is_full": participants_count >= post.numero_giocatori
+    }
 
 # ========== ENDPOINT DI SISTEMA ==========
 

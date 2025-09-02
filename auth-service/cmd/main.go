@@ -34,7 +34,7 @@ func main() {
 
 	// Registrazione degli endpoint esistenti
 	http.HandleFunc("/register", handlers.RegisterHandler(database, sm))
-	http.HandleFunc("/login", handlers.LoginHandler(database, sm)) //Questo dice: "Quando arriva una richiesta a /login, esegui LoginHandler"
+	http.HandleFunc("/login", handlers.LoginHandler(database, sm))
 	http.HandleFunc("/logout", handlers.LogoutHandler(sm))
 
 	http.HandleFunc("/profile", handlers.ProfileBySessionHandler(database, sm))
@@ -44,11 +44,17 @@ func main() {
 	http.HandleFunc("/api/user/by-email", handlers.GetUserByEmailHandler(database, sm))
 	http.HandleFunc("/update-password", handlers.UpdatePasswordHandler(database, sm))
 
-	// NUOVI ENDPOINT PER I PREFERITI
+	// ENDPOINT PER I PREFERITI
 	http.HandleFunc("/favorites/add", handlers.AddFavoriteHandler(database, sm))
 	http.HandleFunc("/favorites/remove", handlers.RemoveFavoriteHandler(database, sm))
 	http.HandleFunc("/favorites/check/", handlers.CheckFavoriteHandler(database, sm))
 	http.HandleFunc("/favorites", handlers.GetUserFavoritesHandler(database, sm))
+
+	//ENDPOINT PER LA PARTECIPAZIONE AGLI EVENTI
+	http.HandleFunc("/events/join", handlers.JoinEventHandler(database, sm))
+	http.HandleFunc("/events/leave", handlers.LeaveEventHandler(database, sm))
+	http.HandleFunc("/events/check/", handlers.CheckParticipationHandler(database, sm))
+	http.HandleFunc("/events/", handlers.GetEventParticipantsHandler(database, sm)) // events/{id}/participants
 
 	log.Println("Auth service running on port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
