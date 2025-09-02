@@ -31,6 +31,10 @@ class Post(Base):
     autore_email = Column(String, nullable=False)
     # Campo da calcio selezionato (ora rinominato più genericamente)
     campo_id = Column(Integer, ForeignKey("sport_fields.id"), nullable=True)
+    # NUOVO CAMPO LIVELLO
+    livello = Column(String, nullable=False, default='Intermedio')  # 'Principiante', 'Intermedio', 'Avanzato'
+    # NUOVO CAMPO NUMERO GIOCATORI
+    numero_giocatori = Column(Integer, nullable=False, default=1)  # Numero di giocatori necessari
     
     # Relazioni
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")

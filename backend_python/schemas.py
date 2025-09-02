@@ -26,6 +26,21 @@ class PostCreate(BaseModel):
     ora_partita: time
     commento: str
     campo_id: Optional[int] = None  # Campo sportivo selezionato
+    livello: str = "Intermedio"  # NUOVO CAMPO LIVELLO con default
+    numero_giocatori: int = 1  # NUOVO CAMPO NUMERO GIOCATORI
+
+    @validator('numero_giocatori')
+    def validate_numero_giocatori(cls, v):
+        if v < 1 or v > 50:
+            raise ValueError('Il numero di giocatori deve essere tra 1 e 50')
+        return v
+
+    @validator('livello')
+    def validate_livello(cls, v):
+        allowed_levels = ['Principiante', 'Intermedio', 'Avanzato']
+        if v not in allowed_levels:
+            raise ValueError(f'Livello deve essere uno tra: {", ".join(allowed_levels)}')
+        return v
 
     @validator('data_partita', pre=True)
     def parse_data_partita(cls, v):
@@ -68,6 +83,8 @@ class PostResponse(BaseModel):
     campo_id: Optional[int] = None
     campo: Optional[SportFieldResponse] = None  # Informazioni complete del campo sportivo
     comments: Optional[List[CommentResponse]] = []
+    livello: str = "Intermedio"  # NUOVO CAMPO LIVELLO
+    numero_giocatori: int = 1  # NUOVO CAMPO NUMERO GIOCATORI
 
     class Config:
         orm_mode = True

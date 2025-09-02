@@ -34,7 +34,7 @@ func main() {
 
 	// Registrazione degli endpoint esistenti
 	http.HandleFunc("/register", handlers.RegisterHandler(database, sm))
-	http.HandleFunc("/login", handlers.LoginHandler(database, sm))
+	http.HandleFunc("/login", handlers.LoginHandler(database, sm)) //Questo dice: "Quando arriva una richiesta a /login, esegui LoginHandler"
 	http.HandleFunc("/logout", handlers.LogoutHandler(sm))
 
 	http.HandleFunc("/profile", handlers.ProfileBySessionHandler(database, sm))

@@ -25,7 +25,7 @@ func LoginHandler(database *db.Database, sm *sessions.SessionManager) http.Handl
 			return
 		}
 
-		// Verifica le credenziali dell'utente
+		// Verifica le credenziali dell'utente nel db
 		userID, err := database.VerifyUser(loginData.EmailOrUsername, loginData.Password)
 		if err != nil {
 			http.Error(w, "Credenziali errate", http.StatusUnauthorized)

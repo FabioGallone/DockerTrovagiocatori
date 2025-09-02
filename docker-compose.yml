@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: ProgCarc
     volumes:
       - ./internal/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./migration_add_livello.sql:/docker-entrypoint-initdb.d/migration_add_livello.sql
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"

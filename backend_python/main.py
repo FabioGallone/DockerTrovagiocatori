@@ -157,7 +157,7 @@ def create_post(post: PostCreate, request: Request, db: Session = Depends(get_db
         
         print(f"[INFO] Campo verificato: {field.nome} supporta {post.sport}")
 
-    # Crea il nuovo post
+    # Crea il nuovo post CON IL LIVELLO E NUMERO GIOCATORI
     new_post = Post(
         titolo=post.titolo,
         provincia=post.provincia,
@@ -167,23 +167,31 @@ def create_post(post: PostCreate, request: Request, db: Session = Depends(get_db
         ora_partita=post.ora_partita,
         commento=post.commento,
         autore_email=user_email,
-        campo_id=post.campo_id
+        campo_id=post.campo_id,
+        livello=post.livello,  # NUOVO CAMPO
+        numero_giocatori=post.numero_giocatori  # NUOVO CAMPO
     )
     
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
     
-    print(f"[INFO] Post creato con ID: {new_post.id}")
+    print(f"[INFO] Post creato con ID: {new_post.id}, livello: {new_post.livello}, giocatori: {new_post.numero_giocatori}")
     return new_post
 
 @app.get("/posts/search", response_model=List[PostResponse])
-def search_posts(provincia: str, sport: str, db: Session = Depends(get_db)):
-    """Cerca post per provincia e sport"""
-    posts = db.query(Post).filter(
+def search_posts(provincia: str, sport: str, livello: str = None, db: Session = Depends(get_db)):
+    """Cerca post per provincia, sport e opzionalmente per livello"""
+    query = db.query(Post).filter(
         Post.provincia == provincia, 
         Post.sport == sport
-    ).all()
+    )
+    
+    # Filtra per livello se specificato
+    if livello:
+        query = query.filter(Post.livello == livello)
+    
+    posts = query.all()
     
     if not posts:
         raise HTTPException(status_code=404, detail="Nessun post trovato per i criteri specificati")
