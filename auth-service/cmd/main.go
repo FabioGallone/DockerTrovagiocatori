@@ -56,6 +56,9 @@ func main() {
 	http.HandleFunc("/events/check/", handlers.CheckParticipationHandler(database, sm))
 	http.HandleFunc("/events/", handlers.GetEventParticipantsHandler(database, sm)) // events/{id}/participants
 
+	// NUOVO: ENDPOINT PER OTTENERE LE PARTECIPAZIONI DELL'UTENTE (per il calendario)
+	http.HandleFunc("/user/participations", handlers.GetUserParticipationsHandler(database, sm))
+
 	log.Println("Auth service running on port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)

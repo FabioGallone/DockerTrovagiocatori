@@ -203,3 +203,38 @@ func GetEventParticipantsHandler(database *db.Database, sm *sessions.SessionMana
 		json.NewEncoder(w).Encode(response)
 	}
 }
+
+// NUOVO: GetUserParticipationsHandler - Ottiene tutti gli eventi a cui l'utente è iscritto
+func GetUserParticipationsHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Verifica autenticazione
+		cookie, err := r.Cookie("session_id")
+		if err != nil {
+			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
+			return
+		}
+
+		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		if err != nil {
+			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
+			return
+		}
+
+		// Ottieni le partecipazioni dell'utente
+		participations, err := database.GetUserParticipations(userID)
+		if err != nil {
+			http.Error(w, "Errore durante il recupero delle partecipazioni", http.StatusInternalServerError)
+			return
+		}
+
+		// Risposta
+		response := map[string]interface{}{
+			"success":        true,
+			"participations": participations,
+			"count":          len(participations),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
