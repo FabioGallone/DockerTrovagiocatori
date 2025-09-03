@@ -59,6 +59,9 @@ func main() {
 	// NUOVO: ENDPOINT PER OTTENERE LE PARTECIPAZIONI DELL'UTENTE (per il calendario)
 	http.HandleFunc("/user/participations", handlers.GetUserParticipationsHandler(database, sm))
 
+	// NUOVO: ENDPOINT PER OTTENERE L'EMAIL DELL'UTENTE (per "I Miei Post")
+	http.HandleFunc("/user/email", handlers.GetUserEmailHandler(database, sm))
+
 	log.Println("Auth service running on port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)
