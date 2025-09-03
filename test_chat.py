@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Script di test per verificare il funzionamento della chat Socket.IO
-Simula due utenti che chattano su un post
+Script di test SEMPLIFICATO per verificare il funzionamento della chat Socket.IO
 """
 
 import asyncio
@@ -11,157 +10,107 @@ from datetime import datetime
 
 # Configurazione
 SERVER_URL = "http://localhost:8000"
-SOCKET_PATH = "/ws/socket.io/"
 
-# Dati di test
-USER1_SESSION = "test_session_user1"
-USER2_SESSION = "test_session_user2"
-TEST_POST_ID = 1
-POST_AUTHOR_EMAIL = "organizzatore@test.com"
-
-async def test_chat_functionality():
-    """Test completo della funzionalità chat"""
+async def test_simple_connection():
+    """Test di connessione semplice"""
     
-    print("🚀 Avvio test chat Socket.IO...")
+    print("🚀 Avvio test connessione Socket.IO...")
     
-    # Crea due client Socket.IO
-    client1 = socketio.AsyncClient()
-    client2 = socketio.AsyncClient()
+    # Crea un client Socket.IO
+    client = socketio.AsyncClient()
     
-    messages_received = []
-    
-    # Event handlers per client1 (organizzatore)
-    @client1.event
+    # Event handlers
+    @client.event
     async def connect():
-        print("✅ Client1 (Organizzatore) connesso")
+        print("✅ Client connesso con successo!")
     
-    @client1.event 
-    async def new_private_message(data):
-        print(f"📨 Client1 ricevuto messaggio: {data['content']} da {data['sender_email']}")
-        messages_received.append(('client1', data))
+    @client.event
+    async def connected(data):
+        print(f"📡 Ricevuto evento 'connected': {data}")
     
-    @client1.event
-    async def user_typing(data):
-        print(f"✍️  Client1: {data['user_email']} sta scrivendo...")
+    @client.event
+    async def disconnect():
+        print("❌ Client disconnesso")
     
-    # Event handlers per client2 (partecipante)
-    @client2.event
-    async def connect():
-        print("✅ Client2 (Partecipante) connesso")
+    @client.event
+    async def connect_error(data):
+        print(f"💥 Errore di connessione: {data}")
     
-    @client2.event
-    async def new_private_message(data):
-        print(f"📨 Client2 ricevuto messaggio: {data['content']} da {data['sender_email']}")
-        messages_received.append(('client2', data))
-        
-    @client2.event
-    async def user_typing(data):
-        print(f"✍️  Client2: {data['user_email']} sta scrivendo...")
+    @client.event
+    async def error(data):
+        print(f"❌ Errore: {data}")
     
     try:
-        # Connetti i client
-        await client1.connect(
-            f"{SERVER_URL}",
-            socketio_path=SOCKET_PATH,
-            auth={'session_cookie': USER1_SESSION}
+        # Test connessione SENZA autenticazione (dovrebbe fallire)
+        print("\n🧪 Test 1: Connessione senza autenticazione (dovrebbe fallire)")
+        
+        try:
+            await client.connect(SERVER_URL, socketio_path="/ws/socket.io/")
+            await asyncio.sleep(2)
+            print("⚠️  Connessione riuscita senza auth (unexpected)")
+        except Exception as e:
+            print(f"✅ Connessione fallita come previsto: {e}")
+        
+        await client.disconnect()
+        await asyncio.sleep(1)
+        
+        # Test connessione CON autenticazione fittizia
+        print("\n🧪 Test 2: Connessione con auth fittizia")
+        
+        await client.connect(
+            SERVER_URL,
+            socketio_path="/ws/socket.io/",
+            auth={'session_cookie': 'test_session_123'}
         )
         
-        await client2.connect(
-            f"{SERVER_URL}",
-            socketio_path=SOCKET_PATH, 
-            auth={'session_cookie': USER2_SESSION}
-        )
+        await asyncio.sleep(3)
         
-        await asyncio.sleep(1)
-        
-        # Test 1: Join nella chat del post
-        print("\n📋 Test 1: Join nella chat del post")
-        
-        await client1.emit('join_post_chat', {
-            'post_id': TEST_POST_ID,
-            'post_author_email': POST_AUTHOR_EMAIL
-        })
-        
-        await client2.emit('join_post_chat', {
-            'post_id': TEST_POST_ID,
-            'post_author_email': POST_AUTHOR_EMAIL
-        })
-        
-        await asyncio.sleep(1)
-        
-        # Test 2: Invio messaggi
-        print("\n💬 Test 2: Invio messaggi")
-        
-        # Client1 invia messaggio
-        await client1.emit('send_private_message', {
-            'post_id': TEST_POST_ID,
-            'recipient_email': 'partecipante@test.com',
-            'message': 'Ciao! Sono l\'organizzatore dell\'evento 🏆'
-        })
-        
-        await asyncio.sleep(0.5)
-        
-        # Client2 risponde
-        await client2.emit('send_private_message', {
-            'post_id': TEST_POST_ID,
-            'recipient_email': POST_AUTHOR_EMAIL,
-            'message': 'Ciao! Grazie per l\'invito, non vedo l\'ora! ⚽'
-        })
-        
-        await asyncio.sleep(0.5)
-        
-        # Test 3: Typing indicators
-        print("\n✍️  Test 3: Typing indicators")
-        
-        await client1.emit('typing_start', {
-            'post_id': TEST_POST_ID,
-            'recipient_email': 'partecipante@test.com'
-        })
-        
-        await asyncio.sleep(1)
-        
-        await client1.emit('typing_stop', {
-            'post_id': TEST_POST_ID,
-            'recipient_email': 'partecipante@test.com'
-        })
-        
-        # Test 4: Messaggio più lungo
-        await client1.emit('send_private_message', {
-            'post_id': TEST_POST_ID,
-            'recipient_email': 'partecipante@test.com',
-            'message': 'Perfetto! L\'evento è domani alle 18:30 al campo San Siro. Ci vediamo negli spogliatoi 15 minuti prima. Porta scarpe da calcio e una maglietta di riserva! 👕⚽'
-        })
-        
-        await asyncio.sleep(1)
-        
-        # Test 5: Leave chat
-        print("\n👋 Test 5: Leave chat")
-        
-        await client1.emit('leave_post_chat', {
-            'post_id': TEST_POST_ID,
-            'recipient_email': 'partecipante@test.com'
-        })
-        
-        await asyncio.sleep(1)
-        
-        print(f"\n📊 Risultati test:")
-        print(f"   Messaggi ricevuti: {len(messages_received)}")
-        for client, msg in messages_received:
-            timestamp = datetime.fromisoformat(msg['timestamp'].replace('Z', '+00:00'))
-            print(f"   {client}: '{msg['content']}' ({timestamp.strftime('%H:%M:%S')})")
-        
-        print("\n✅ Test completato con successo!")
+        print("\n📊 Test completato!")
         
     except Exception as e:
-        print(f"❌ Errore durante il test: {e}")
+        print(f"💥 Errore durante il test: {e}")
         import traceback
         traceback.print_exc()
     
     finally:
-        # Disconnetti i client
-        await client1.disconnect()
-        await client2.disconnect()
-        print("🔌 Client disconnessi")
+        try:
+            await client.disconnect()
+        except:
+            pass
+        print("🔌 Client disconnesso")
+
+
+async def test_endpoint_availability():
+    """Testa la disponibilità degli endpoint"""
+    import aiohttp
+    
+    print("\n🌐 Test disponibilità endpoint...")
+    
+    endpoints_to_test = [
+        f"{SERVER_URL}/",
+        f"{SERVER_URL}/health",
+        f"{SERVER_URL}/ws/test",
+    ]
+    
+    async with aiohttp.ClientSession() as session:
+        for endpoint in endpoints_to_test:
+            try:
+                async with session.get(endpoint, timeout=5) as response:
+                    print(f"✅ {endpoint}: {response.status}")
+                    if response.status == 200:
+                        text = await response.text()
+                        print(f"   Response: {text[:100]}...")
+            except Exception as e:
+                print(f"❌ {endpoint}: {e}")
+
 
 if __name__ == "__main__":
-    asyncio.run(test_chat_functionality())
+    print("=" * 60)
+    print("🧪 TEST SOCKET.IO - TROVAGIOCATORI")
+    print("=" * 60)
+    
+    # Prima testa gli endpoint HTTP
+    asyncio.run(test_endpoint_availability())
+    
+    # Poi testa Socket.IO
+    asyncio.run(test_simple_connection())
