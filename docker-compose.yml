@@ -35,7 +35,7 @@ services:
     build: ./backend_python
     container_name: my_backend_python
     ports:
-      - "8000:8000"  # Porta esposta per comunicare con il frontend
+      - "8000:8000"  # Porta FastAPI e Socket.IO
     environment:
       DB_HOST: db
       DB_USER: APG
@@ -43,6 +43,7 @@ services:
       DB_NAME: ProgCarc
     depends_on:
       - db
+      - auth-service  # Il backend Python dipende dall'auth service
     restart: always
 
 volumes:

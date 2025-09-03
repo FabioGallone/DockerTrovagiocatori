@@ -9,10 +9,16 @@ from models import Post, Comment, SportField
 from schemas import PostCreate, PostResponse, CommentCreate, CommentResponse, SportFieldResponse
 from starlette.requests import Request
 
+# NUOVO: Import per Socket.IO
+from socketio_handler import sio, socket_app, get_chat_stats
+
 app = FastAPI(title="TrovaGiocatori API", description="API per la gestione di eventi sportivi e campi")
 
 # Creazione delle tabelle nel database
 Base.metadata.create_all(bind=engine)
+
+# NUOVO: Monta Socket.IO sull'app FastAPI
+app.mount("/ws", socket_app)
 
 # Dependency per la sessione del database
 def get_db():
@@ -67,6 +73,7 @@ def load_sport_fields():
 @app.on_event("startup")
 async def startup_event():
     load_sport_fields()
+    print("[INFO] ✅ Socket.IO server integrato su /ws")
 
 # Ottieni l'email dell'utente autenticato dall'auth service (Go)
 def get_current_user_email(request: Request):
@@ -94,6 +101,26 @@ def get_current_user_email(request: Request):
     except requests.exceptions.RequestException as e:
         print(f"[DEBUG] Errore connessione auth service: {e}")
         raise HTTPException(status_code=500, detail="Auth service unavailable")
+
+# ========== NUOVO: ENDPOINT CHAT ==========
+
+@app.get("/chat/stats")
+async def get_chat_statistics():
+    """Ottieni statistiche sulle chat attive (endpoint di debug)"""
+    try:
+        stats = await get_chat_stats()
+        return {"success": True, "stats": stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/chat/test")
+async def test_chat_endpoint():
+    """Endpoint di test per verificare che il sistema chat sia attivo"""
+    return {
+        "message": "Chat system is active",
+        "socketio_endpoint": "/ws/socket.io/",
+        "status": "OK"
+    }
 
 # ========== ENDPOINT CAMPI SPORTIVI ==========
 
