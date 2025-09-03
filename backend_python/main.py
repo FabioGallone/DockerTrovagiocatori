@@ -179,7 +179,80 @@ def create_post(post: PostCreate, request: Request, db: Session = Depends(get_db
     print(f"[INFO] Post creato con ID: {new_post.id}, livello: {new_post.livello}, giocatori: {new_post.numero_giocatori}")
     return new_post
 
-@app.get("/posts/search", response_model=List[dict])
+# NUOVO: Endpoint specifico per ottenere i post dell'utente corrente
+@app.get("/posts/by-user")
+def get_posts_by_user(request: Request, db: Session = Depends(get_db)):
+    """Ottieni tutti i post creati dall'utente autenticato con informazioni sui partecipanti"""
+    try:
+        user_email = get_current_user_email(request)
+        print(f"[MY_POSTS] Recupero post per utente: {user_email}")
+        
+        # Ottieni tutti i post creati dall'utente
+        posts = db.query(Post).filter(Post.autore_email == user_email).order_by(Post.data_partita.desc()).all()
+        
+        print(f"[MY_POSTS] Trovati {len(posts)} post nel database per l'utente {user_email}")
+        
+        if not posts:
+            print(f"[MY_POSTS] Nessun post trovato per l'utente {user_email}")
+            return []
+        
+        # Arricchisce ogni post con informazioni sui partecipanti
+        enriched_posts = []
+        for post in posts:
+            print(f"[MY_POSTS] Elaborando post ID {post.id}: {post.titolo}")
+            
+            # Ottieni il numero di partecipanti
+            participants_count = 0
+            try:
+                response = requests.get(f"http://auth-service:8080/events/{post.id}/participants", timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    participants_count = data.get("count", 0)
+                    print(f"[MY_POSTS] Post {post.id} ha {participants_count} partecipanti")
+                else:
+                    print(f"[MY_POSTS] Errore nel recupero partecipanti per post {post.id}: {response.status_code}")
+            except Exception as e:
+                print(f"[MY_POSTS] Eccezione nel recupero partecipanti per post {post.id}: {e}")
+            
+            # Calcola disponibilità
+            posti_disponibili = max(0, post.numero_giocatori - participants_count)
+            is_full = posti_disponibili == 0
+            
+            # Crea il dizionario del post con informazioni aggiuntive
+            post_dict = {
+                "id": post.id,
+                "titolo": post.titolo,
+                "provincia": post.provincia,
+                "citta": post.citta,
+                "sport": post.sport,
+                "data_partita": post.data_partita.strftime("%Y-%m-%d"),
+                "ora_partita": post.ora_partita.strftime("%H:%M"),
+                "commento": post.commento,
+                "autore_email": post.autore_email,
+                "campo_id": post.campo_id,
+                "campo": {
+                    "nome": post.campo.nome,
+                    "indirizzo": post.campo.indirizzo
+                } if post.campo else None,
+                "livello": post.livello,
+                "numero_giocatori": post.numero_giocatori,
+                "partecipanti_iscritti": participants_count,
+                "posti_disponibili": posti_disponibili,
+                "is_full": is_full
+            }
+            enriched_posts.append(post_dict)
+        
+        print(f"[MY_POSTS] Restituendo {len(enriched_posts)} post arricchiti")
+        return enriched_posts
+        
+    except HTTPException as he:
+        print(f"[MY_POSTS] HTTPException: {he.detail}")
+        raise he
+    except Exception as e:
+        print(f"[MY_POSTS] Errore generico: {e}")
+        raise HTTPException(status_code=500, detail=f"Errore interno del server: {str(e)}")
+
+@app.get("/posts/search")
 def search_posts_with_participants(provincia: str, sport: str, livello: str = None, db: Session = Depends(get_db)):
     """Cerca post per provincia, sport e opzionalmente per livello, includendo info sui partecipanti"""
     query = db.query(Post).filter(
@@ -401,61 +474,6 @@ def get_post_availability(post_id: int, db: Session = Depends(get_db)):
         "posti_disponibili": posti_disponibili,
         "is_full": posti_disponibili == 0
     }
-
-# Modifica l'endpoint search_posts per includere informazioni sui partecipanti
-@app.get("/posts/search", response_model=List[PostResponse])
-def search_posts_with_participants(provincia: str, sport: str, livello: str = None, db: Session = Depends(get_db)):
-    """Cerca post per provincia, sport e opzionalmente per livello, includendo info sui partecipanti"""
-    query = db.query(Post).filter(
-        Post.provincia == provincia, 
-        Post.sport == sport
-    )
-    
-    # Filtra per livello se specificato
-    if livello:
-        query = query.filter(Post.livello == livello)
-    
-    posts = query.all()
-    
-    if not posts:
-        raise HTTPException(status_code=404, detail="Nessun post trovato per i criteri specificati")
-    
-    # Arricchisce ogni post con informazioni sui partecipanti
-    enriched_posts = []
-    for post in posts:
-        # Ottieni il numero di partecipanti
-        try:
-            response = requests.get(f"http://auth-service:8080/events/{post.id}/participants", timeout=3)
-            if response.status_code == 200:
-                data = response.json()
-                participants_count = data.get("count", 0)
-            else:
-                participants_count = 0
-        except Exception as e:
-            print(f"[DEBUG] Errore nel recupero partecipanti per post {post.id}: {e}")
-            participants_count = 0
-        
-        # Crea una copia del post con informazioni aggiuntive
-        post_dict = {
-            "id": post.id,
-            "titolo": post.titolo,
-            "provincia": post.provincia,
-            "citta": post.citta,
-            "sport": post.sport,
-            "data_partita": post.data_partita,
-            "ora_partita": post.ora_partita,
-            "commento": post.commento,
-            "autore_email": post.autore_email,
-            "campo_id": post.campo_id,
-            "campo": post.campo,
-            "livello": post.livello,
-            "numero_giocatori": post.numero_giocatori,
-            "partecipanti_iscritti": participants_count,
-            "posti_disponibili": max(0, post.numero_giocatori - participants_count)
-        }
-        enriched_posts.append(post_dict)
-    
-    return enriched_posts
 
 # Endpoint per ottenere i dettagli di un singolo post con partecipanti
 @app.get("/posts/{post_id}/details")
