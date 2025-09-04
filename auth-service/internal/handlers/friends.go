@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -45,9 +46,14 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 			return
 		}
 
+		// DEBUG: Log dettagliati
+		fmt.Printf("[FRIENDS DEBUG] UserID mittente: %d\n", userID)
+		fmt.Printf("[FRIENDS DEBUG] Email destinatario: %s\n", req.TargetEmail)
+
 		// Verifica che l'email target esista
 		targetUserID, err := database.GetUserIDByEmail(req.TargetEmail)
 		if err != nil {
+			fmt.Printf("[FRIENDS DEBUG] Email destinatario non trovata: %v\n", err)
 			response := FriendResponse{
 				Success: false,
 				Message: "Utente non trovato",
@@ -56,6 +62,8 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+
+		fmt.Printf("[FRIENDS DEBUG] UserID destinatario: %d\n", targetUserID)
 
 		// Verifica che non stia tentando di aggiungere se stesso
 		if targetUserID == userID {
@@ -71,6 +79,7 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 		// Verifica che non siano già amici
 		isFriend, err := database.CheckFriendship(userID, targetUserID)
 		if err != nil {
+			fmt.Printf("[FRIENDS DEBUG] Errore controllo amicizia: %v\n", err)
 			http.Error(w, "Errore interno del server", http.StatusInternalServerError)
 			return
 		}
@@ -88,6 +97,7 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 		// Verifica che non ci sia già una richiesta pendente
 		hasRequest, err := database.CheckPendingFriendRequest(userID, targetUserID)
 		if err != nil {
+			fmt.Printf("[FRIENDS DEBUG] Errore controllo richiesta pendente: %v\n", err)
 			http.Error(w, "Errore interno del server", http.StatusInternalServerError)
 			return
 		}
@@ -104,9 +114,12 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 
 		// Invia la richiesta di amicizia
 		if err := database.SendFriendRequest(userID, targetUserID); err != nil {
+			fmt.Printf("[FRIENDS DEBUG] Errore invio richiesta: %v\n", err)
 			http.Error(w, "Errore durante l'invio della richiesta", http.StatusInternalServerError)
 			return
 		}
+
+		fmt.Printf("[FRIENDS DEBUG] ✅ Richiesta inviata con successo da %d a %d\n", userID, targetUserID)
 
 		// Risposta di successo
 		response := FriendResponse{
@@ -378,6 +391,129 @@ func GetFriendRequestsHandler(database *db.Database, sm *sessions.SessionManager
 		response := FriendResponse{
 			Success:  true,
 			Requests: requests,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// Aggiungi questi handler al file auth-service/internal/handlers/friends.go
+
+// GetSentFriendRequestsHandler - Ottiene le richieste di amicizia inviate
+func GetSentFriendRequestsHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Verifica autenticazione
+		cookie, err := r.Cookie("session_id")
+		if err != nil {
+			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
+			return
+		}
+
+		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		if err != nil {
+			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
+			return
+		}
+
+		// Ottieni le richieste di amicizia inviate
+		requests, err := database.GetSentFriendRequests(userID)
+		if err != nil {
+			http.Error(w, "Errore durante il recupero delle richieste inviate", http.StatusInternalServerError)
+			return
+		}
+
+		// Risposta
+		response := FriendResponse{
+			Success:  true,
+			Requests: requests,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// SearchUsersHandler - Cerca utenti per username o email
+func SearchUsersHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Verifica autenticazione
+		cookie, err := r.Cookie("session_id")
+		if err != nil {
+			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
+			return
+		}
+
+		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		if err != nil {
+			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
+			return
+		}
+
+		// Ottieni termine di ricerca dall'URL
+		searchTerm := r.URL.Query().Get("q")
+		if searchTerm == "" {
+			http.Error(w, "Termine di ricerca mancante", http.StatusBadRequest)
+			return
+		}
+
+		if len(searchTerm) < 3 {
+			http.Error(w, "Il termine di ricerca deve essere di almeno 3 caratteri", http.StatusBadRequest)
+			return
+		}
+
+		// Cerca gli utenti
+		users, err := database.SearchUsers(searchTerm, userID)
+		if err != nil {
+			http.Error(w, "Errore durante la ricerca utenti", http.StatusInternalServerError)
+			return
+		}
+
+		// Risposta diretta con array di utenti
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+	}
+}
+
+// CancelFriendRequestHandler - Annulla una richiesta di amicizia inviata
+func CancelFriendRequestHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Verifica autenticazione
+		cookie, err := r.Cookie("session_id")
+		if err != nil {
+			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
+			return
+		}
+
+		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		if err != nil {
+			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
+			return
+		}
+
+		// Ottieni request_id dall'URL
+		requestIDStr := r.URL.Query().Get("request_id")
+		if requestIDStr == "" {
+			http.Error(w, "request_id mancante", http.StatusBadRequest)
+			return
+		}
+
+		requestID, err := strconv.ParseInt(requestIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "request_id non valido", http.StatusBadRequest)
+			return
+		}
+
+		// Annulla la richiesta
+		if err := database.CancelFriendRequest(requestID, userID); err != nil {
+			http.Error(w, "Errore durante l'annullamento della richiesta", http.StatusInternalServerError)
+			return
+		}
+
+		// Risposta di successo
+		response := FriendResponse{
+			Success: true,
+			Message: "Richiesta di amicizia annullata",
 		}
 
 		w.Header().Set("Content-Type", "application/json")

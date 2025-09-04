@@ -81,11 +81,10 @@ func main() {
 	http.HandleFunc("/friends/list", handlers.GetFriendsListHandler(database, sm))        // GET
 	http.HandleFunc("/friends/requests", handlers.GetFriendRequestsHandler(database, sm)) // GET
 
-	// ENDPOINT AGGIUNTIVI (opzionali)
-	// http.HandleFunc("/friends/search", handlers.SearchUsersHandler(database, sm))               // GET
-	// http.HandleFunc("/friends/sent-requests", handlers.GetSentFriendRequestsHandler(database, sm)) // GET
-	// http.HandleFunc("/friends/cancel", handlers.CancelFriendRequestHandler(database, sm))       // POST
-	// http.HandleFunc("/friends/mutual", handlers.GetMutualFriendsHandler(database, sm))          // GET
+	// ENDPOINT AGGIUNTIVI (ora attivi)
+	http.HandleFunc("/friends/search", handlers.SearchUsersHandler(database, sm))                  // GET
+	http.HandleFunc("/friends/sent-requests", handlers.GetSentFriendRequestsHandler(database, sm)) // GET
+	http.HandleFunc("/friends/cancel", handlers.CancelFriendRequestHandler(database, sm))          // POST
 
 	log.Println("Auth service running on port 8080")
 	log.Println("✅ Endpoints degli amici configurati:")
