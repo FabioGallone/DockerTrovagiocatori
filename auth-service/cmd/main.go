@@ -29,6 +29,11 @@ func main() {
 	}
 	defer database.Conn.Close()
 
+	// NUOVO: Crea le tabelle degli amici se non esistono
+	if err := database.CreateFriendsTablesIfNotExists(); err != nil {
+		log.Fatalf("Error creating friends tables: %v", err)
+	}
+
 	// Inizializza il SessionManager
 	sm := sessions.NewSessionManager()
 
@@ -50,19 +55,48 @@ func main() {
 	http.HandleFunc("/favorites/check/", handlers.CheckFavoriteHandler(database, sm))
 	http.HandleFunc("/favorites", handlers.GetUserFavoritesHandler(database, sm))
 
-	//ENDPOINT PER LA PARTECIPAZIONE AGLI EVENTI
+	// ENDPOINT PER LA PARTECIPAZIONE AGLI EVENTI
 	http.HandleFunc("/events/join", handlers.JoinEventHandler(database, sm))
 	http.HandleFunc("/events/leave", handlers.LeaveEventHandler(database, sm))
 	http.HandleFunc("/events/check/", handlers.CheckParticipationHandler(database, sm))
 	http.HandleFunc("/events/", handlers.GetEventParticipantsHandler(database, sm)) // events/{id}/participants
 
-	// NUOVO: ENDPOINT PER OTTENERE LE PARTECIPAZIONI DELL'UTENTE (per il calendario)
+	// ENDPOINT PER LE PARTECIPAZIONI DELL'UTENTE (per il calendario)
 	http.HandleFunc("/user/participations", handlers.GetUserParticipationsHandler(database, sm))
 
-	// NUOVO: ENDPOINT PER OTTENERE L'EMAIL DELL'UTENTE (per "I Miei Post")
+	// ENDPOINT PER OTTENERE L'EMAIL DELL'UTENTE (per "I Miei Post")
 	http.HandleFunc("/user/email", handlers.GetUserEmailHandler(database, sm))
 
+	// NUOVI ENDPOINT PER GLI AMICI
+	// Gestione richieste di amicizia
+	http.HandleFunc("/friends/request", handlers.SendFriendRequestHandler(database, sm))  // POST
+	http.HandleFunc("/friends/accept", handlers.AcceptFriendRequestHandler(database, sm)) // POST
+	http.HandleFunc("/friends/reject", handlers.RejectFriendRequestHandler(database, sm)) // POST
+	http.HandleFunc("/friends/remove", handlers.RemoveFriendHandler(database, sm))        // DELETE
+
+	// Controllo stato amicizia
+	http.HandleFunc("/friends/check", handlers.CheckFriendshipHandler(database, sm)) // GET
+
+	// Liste e richieste
+	http.HandleFunc("/friends/list", handlers.GetFriendsListHandler(database, sm))        // GET
+	http.HandleFunc("/friends/requests", handlers.GetFriendRequestsHandler(database, sm)) // GET
+
+	// ENDPOINT AGGIUNTIVI (opzionali)
+	// http.HandleFunc("/friends/search", handlers.SearchUsersHandler(database, sm))               // GET
+	// http.HandleFunc("/friends/sent-requests", handlers.GetSentFriendRequestsHandler(database, sm)) // GET
+	// http.HandleFunc("/friends/cancel", handlers.CancelFriendRequestHandler(database, sm))       // POST
+	// http.HandleFunc("/friends/mutual", handlers.GetMutualFriendsHandler(database, sm))          // GET
+
 	log.Println("Auth service running on port 8080")
+	log.Println("✅ Endpoints degli amici configurati:")
+	log.Println("   POST /friends/request    - Invia richiesta amicizia")
+	log.Println("   POST /friends/accept     - Accetta richiesta amicizia")
+	log.Println("   POST /friends/reject     - Rifiuta richiesta amicizia")
+	log.Println("   DELETE /friends/remove   - Rimuove amicizia")
+	log.Println("   GET /friends/check       - Controlla se sono amici")
+	log.Println("   GET /friends/list        - Lista amici")
+	log.Println("   GET /friends/requests    - Richieste ricevute")
+
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)
 	}
