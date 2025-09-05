@@ -29,12 +29,14 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 		// Verifica autenticazione
 		cookie, err := r.Cookie("session_id")
 		if err != nil {
+			fmt.Printf("[FRIENDS ERROR] Session cookie non trovato: %v\n", err)
 			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
 			return
 		}
 
 		userID, err := sm.GetUserIDBySessionID(cookie.Value)
 		if err != nil {
+			fmt.Printf("[FRIENDS ERROR] Sessione non valida per cookie %s: %v\n", cookie.Value, err)
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
 			return
 		}
@@ -42,18 +44,21 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 		// Decodifica la richiesta
 		var req FriendRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			fmt.Printf("[FRIENDS ERROR] Formato richiesta non valido: %v\n", err)
 			http.Error(w, "Formato richiesta non valido", http.StatusBadRequest)
 			return
 		}
 
-		// DEBUG: Log dettagliati
+		// DEBUG DETTAGLIATO
+		fmt.Printf("[FRIENDS DEBUG] === INIZIO RICHIESTA AMICIZIA ===\n")
 		fmt.Printf("[FRIENDS DEBUG] UserID mittente: %d\n", userID)
 		fmt.Printf("[FRIENDS DEBUG] Email destinatario: %s\n", req.TargetEmail)
+		fmt.Printf("[FRIENDS DEBUG] Cookie session: %s\n", cookie.Value)
 
 		// Verifica che l'email target esista
 		targetUserID, err := database.GetUserIDByEmail(req.TargetEmail)
 		if err != nil {
-			fmt.Printf("[FRIENDS DEBUG] Email destinatario non trovata: %v\n", err)
+			fmt.Printf("[FRIENDS ERROR] Email destinatario non trovata (%s): %v\n", req.TargetEmail, err)
 			response := FriendResponse{
 				Success: false,
 				Message: "Utente non trovato",
@@ -63,10 +68,11 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 			return
 		}
 
-		fmt.Printf("[FRIENDS DEBUG] UserID destinatario: %d\n", targetUserID)
+		fmt.Printf("[FRIENDS DEBUG] UserID destinatario trovato: %d\n", targetUserID)
 
 		// Verifica che non stia tentando di aggiungere se stesso
 		if targetUserID == userID {
+			fmt.Printf("[FRIENDS ERROR] Tentativo di aggiungere se stesso: userID=%d, targetUserID=%d\n", userID, targetUserID)
 			response := FriendResponse{
 				Success: false,
 				Message: "Non puoi aggiungere te stesso come amico",
@@ -79,12 +85,13 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 		// Verifica che non siano già amici
 		isFriend, err := database.CheckFriendship(userID, targetUserID)
 		if err != nil {
-			fmt.Printf("[FRIENDS DEBUG] Errore controllo amicizia: %v\n", err)
+			fmt.Printf("[FRIENDS ERROR] Errore controllo amicizia: %v\n", err)
 			http.Error(w, "Errore interno del server", http.StatusInternalServerError)
 			return
 		}
 
 		if isFriend {
+			fmt.Printf("[FRIENDS INFO] Utenti già amici: %d e %d\n", userID, targetUserID)
 			response := FriendResponse{
 				Success: false,
 				Message: "Siete già amici",
@@ -97,12 +104,13 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 		// Verifica che non ci sia già una richiesta pendente
 		hasRequest, err := database.CheckPendingFriendRequest(userID, targetUserID)
 		if err != nil {
-			fmt.Printf("[FRIENDS DEBUG] Errore controllo richiesta pendente: %v\n", err)
+			fmt.Printf("[FRIENDS ERROR] Errore controllo richiesta pendente: %v\n", err)
 			http.Error(w, "Errore interno del server", http.StatusInternalServerError)
 			return
 		}
 
 		if hasRequest {
+			fmt.Printf("[FRIENDS INFO] Richiesta già pendente tra %d e %d\n", userID, targetUserID)
 			response := FriendResponse{
 				Success: false,
 				Message: "Richiesta di amicizia già inviata",
@@ -113,13 +121,15 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 		}
 
 		// Invia la richiesta di amicizia
+		fmt.Printf("[FRIENDS DEBUG] Tentativo di invio richiesta...\n")
 		if err := database.SendFriendRequest(userID, targetUserID); err != nil {
-			fmt.Printf("[FRIENDS DEBUG] Errore invio richiesta: %v\n", err)
+			fmt.Printf("[FRIENDS ERROR] Errore invio richiesta nel database: %v\n", err)
 			http.Error(w, "Errore durante l'invio della richiesta", http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Printf("[FRIENDS DEBUG] ✅ Richiesta inviata con successo da %d a %d\n", userID, targetUserID)
+		fmt.Printf("[FRIENDS SUCCESS] ✅ Richiesta inviata con successo da %d a %d\n", userID, targetUserID)
+		fmt.Printf("[FRIENDS DEBUG] === FINE RICHIESTA AMICIZIA ===\n")
 
 		// Risposta di successo
 		response := FriendResponse{
