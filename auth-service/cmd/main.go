@@ -87,14 +87,6 @@ func main() {
 	http.HandleFunc("/friends/cancel", handlers.CancelFriendRequestHandler(database, sm))          // POST
 
 	log.Println("Auth service running on port 8080")
-	log.Println("✅ Endpoints degli amici configurati:")
-	log.Println("   POST /friends/request    - Invia richiesta amicizia")
-	log.Println("   POST /friends/accept     - Accetta richiesta amicizia")
-	log.Println("   POST /friends/reject     - Rifiuta richiesta amicizia")
-	log.Println("   DELETE /friends/remove   - Rimuove amicizia")
-	log.Println("   GET /friends/check       - Controlla se sono amici")
-	log.Println("   GET /friends/list        - Lista amici")
-	log.Println("   GET /friends/requests    - Richieste ricevute")
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)

@@ -1,4 +1,4 @@
-// auth-service/internal/db/friends.go
+// auth-service/internal/db/friends.go - Versione pulita
 package db
 
 import (
@@ -466,78 +466,6 @@ func (db *Database) SearchUsers(searchTerm string, currentUserID int64) ([]UserS
 	}
 
 	return users, rows.Err()
-}
-
-// GetMutualFriends - Ottiene gli amici in comune tra due utenti
-func (db *Database) GetMutualFriends(userID1, userID2 int64) ([]FriendInfo, error) {
-	rows, err := db.Conn.Query(`
-		SELECT DISTINCT
-			u.id,
-			u.username,
-			u.nome,
-			u.cognome,
-			u.email,
-			u.profile_picture
-		FROM users u
-		WHERE u.id IN (
-			-- Amici del primo utente
-			SELECT 
-				CASE 
-					WHEN f1.user1_id = $1 THEN f1.user2_id
-					ELSE f1.user1_id
-				END as friend_id
-			FROM friendships f1
-			WHERE f1.user1_id = $1 OR f1.user2_id = $1
-		)
-		AND u.id IN (
-			-- Amici del secondo utente
-			SELECT 
-				CASE 
-					WHEN f2.user1_id = $2 THEN f2.user2_id
-					ELSE f2.user1_id
-				END as friend_id
-			FROM friendships f2
-			WHERE f2.user1_id = $2 OR f2.user2_id = $2
-		)
-		ORDER BY u.username`,
-		userID1, userID2)
-
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var mutualFriends []FriendInfo
-	for rows.Next() {
-		var friend FriendInfo
-
-		err := rows.Scan(
-			&friend.UserID,
-			&friend.Username,
-			&friend.Nome,
-			&friend.Cognome,
-			&friend.Email,
-			&friend.ProfilePic,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		mutualFriends = append(mutualFriends, friend)
-	}
-
-	return mutualFriends, rows.Err()
-}
-
-// GetFriendsCount - Ottiene il numero di amici di un utente
-func (db *Database) GetFriendsCount(userID int64) (int, error) {
-	var count int
-	err := db.Conn.QueryRow(`
-		SELECT COUNT(*) FROM friendships 
-		WHERE user1_id = $1 OR user2_id = $1`,
-		userID).Scan(&count)
-
-	return count, err
 }
 
 // Strutture dati per le funzioni sopra
