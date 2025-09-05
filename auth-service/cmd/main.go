@@ -34,6 +34,11 @@ func main() {
 		log.Fatalf("Error creating friends tables: %v", err)
 	}
 
+	// NUOVO: Crea le tabelle degli inviti eventi se non esistono
+	if err := database.CreateEventInvitesTableIfNotExists(); err != nil {
+		log.Fatalf("Error creating event invites tables: %v", err)
+	}
+
 	// Inizializza il SessionManager
 	sm := sessions.NewSessionManager()
 
@@ -85,6 +90,12 @@ func main() {
 	http.HandleFunc("/friends/search", handlers.SearchUsersHandler(database, sm))                  // GET
 	http.HandleFunc("/friends/sent-requests", handlers.GetSentFriendRequestsHandler(database, sm)) // GET
 	http.HandleFunc("/friends/cancel", handlers.CancelFriendRequestHandler(database, sm))          // POST
+
+	// NUOVI ENDPOINT PER GLI INVITI EVENTI
+	http.HandleFunc("/events/invite", handlers.SendEventInviteHandler(database, sm))          // POST
+	http.HandleFunc("/events/invites", handlers.GetEventInvitesHandler(database, sm))         // GET
+	http.HandleFunc("/events/invite/accept", handlers.AcceptEventInviteHandler(database, sm)) // POST
+	http.HandleFunc("/events/invite/reject", handlers.RejectEventInviteHandler(database, sm)) // POST
 
 	log.Println("Auth service running on port 8080")
 
