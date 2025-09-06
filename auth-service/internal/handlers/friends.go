@@ -1,4 +1,4 @@
-// auth-service/internal/handlers/friends.go
+// auth-service/internal/handlers/friends.go - VERSIONE AGGIORNATA CON NOTIFICHE
 package handlers
 
 import (
@@ -23,7 +23,7 @@ type FriendResponse struct {
 	Requests []db.FriendRequestInfo `json:"requests,omitempty"`
 }
 
-// SendFriendRequestHandler - Invia una richiesta di amicizia
+// SendFriendRequestHandler - Invia una richiesta di amicizia CON NOTIFICA
 func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verifica autenticazione
@@ -128,6 +128,32 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 			return
 		}
 
+		// NUOVO: Ottieni le informazioni del mittente per la notifica
+		senderProfile, err := database.GetUserProfile(fmt.Sprintf("%d", userID))
+		if err != nil {
+			fmt.Printf("[FRIENDS WARNING] Impossibile ottenere profilo mittente per notifica: %v\n", err)
+		}
+
+		// NUOVO: Ottieni l'ID della richiesta appena creata per la notifica
+		requestID, err := database.GetLatestFriendRequestID(userID, targetUserID)
+		if err != nil {
+			fmt.Printf("[FRIENDS WARNING] Impossibile ottenere ID richiesta per notifica: %v\n", err)
+		} else {
+			// NUOVO: Crea la notifica per il destinatario
+			senderUsername := "Utente sconosciuto"
+			if err == nil {
+				senderUsername = senderProfile.Username
+			}
+
+			notifErr := database.CreateFriendRequestNotification(targetUserID, userID, requestID, senderUsername)
+			if notifErr != nil {
+				fmt.Printf("[FRIENDS WARNING] Errore creazione notifica: %v\n", notifErr)
+				// Non interrompiamo il flusso per un errore di notifica
+			} else {
+				fmt.Printf("[FRIENDS SUCCESS] ✅ Notifica creata per richiesta amicizia da %d a %d\n", userID, targetUserID)
+			}
+		}
+
 		fmt.Printf("[FRIENDS SUCCESS] ✅ Richiesta inviata con successo da %d a %d\n", userID, targetUserID)
 		fmt.Printf("[FRIENDS DEBUG] === FINE RICHIESTA AMICIZIA ===\n")
 
@@ -142,7 +168,7 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 	}
 }
 
-// AcceptFriendRequestHandler - Accetta una richiesta di amicizia
+// AcceptFriendRequestHandler - Accetta una richiesta di amicizia e rimuove la notifica
 func AcceptFriendRequestHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verifica autenticazione
@@ -177,6 +203,15 @@ func AcceptFriendRequestHandler(database *db.Database, sm *sessions.SessionManag
 			return
 		}
 
+		// NUOVO: Rimuovi la notifica correlata quando la richiesta viene accettata
+		notifErr := database.DeleteNotificationByRelated(userID, db.NotificationTypeFriendRequest, requestID)
+		if notifErr != nil {
+			fmt.Printf("[FRIENDS WARNING] Errore rimozione notifica dopo accettazione: %v\n", notifErr)
+			// Non interrompiamo il flusso
+		} else {
+			fmt.Printf("[FRIENDS SUCCESS] ✅ Notifica rimossa dopo accettazione richiesta %d\n", requestID)
+		}
+
 		// Risposta di successo
 		response := FriendResponse{
 			Success: true,
@@ -188,7 +223,7 @@ func AcceptFriendRequestHandler(database *db.Database, sm *sessions.SessionManag
 	}
 }
 
-// RejectFriendRequestHandler - Rifiuta una richiesta di amicizia
+// RejectFriendRequestHandler - Rifiuta una richiesta di amicizia e rimuove la notifica
 func RejectFriendRequestHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verifica autenticazione
@@ -221,6 +256,15 @@ func RejectFriendRequestHandler(database *db.Database, sm *sessions.SessionManag
 		if err := database.RejectFriendRequest(requestID, userID); err != nil {
 			http.Error(w, "Errore durante il rifiuto della richiesta", http.StatusInternalServerError)
 			return
+		}
+
+		// NUOVO: Rimuovi la notifica correlata quando la richiesta viene rifiutata
+		notifErr := database.DeleteNotificationByRelated(userID, db.NotificationTypeFriendRequest, requestID)
+		if notifErr != nil {
+			fmt.Printf("[FRIENDS WARNING] Errore rimozione notifica dopo rifiuto: %v\n", notifErr)
+			// Non interrompiamo il flusso
+		} else {
+			fmt.Printf("[FRIENDS SUCCESS] ✅ Notifica rimossa dopo rifiuto richiesta %d\n", requestID)
 		}
 
 		// Risposta di successo
@@ -408,8 +452,6 @@ func GetFriendRequestsHandler(database *db.Database, sm *sessions.SessionManager
 	}
 }
 
-// Aggiungi questi handler al file auth-service/internal/handlers/friends.go
-
 // GetSentFriendRequestsHandler - Ottiene le richieste di amicizia inviate
 func GetSentFriendRequestsHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -518,6 +560,18 @@ func CancelFriendRequestHandler(database *db.Database, sm *sessions.SessionManag
 		if err := database.CancelFriendRequest(requestID, userID); err != nil {
 			http.Error(w, "Errore durante l'annullamento della richiesta", http.StatusInternalServerError)
 			return
+		}
+
+		// NUOVO: Ottieni l'ID del destinatario per rimuovere la notifica
+		receiverID, getReceiverErr := database.GetFriendRequestReceiver(requestID)
+		if getReceiverErr == nil {
+			// Rimuovi la notifica dal destinatario
+			notifErr := database.DeleteNotificationByRelated(receiverID, db.NotificationTypeFriendRequest, requestID)
+			if notifErr != nil {
+				fmt.Printf("[FRIENDS WARNING] Errore rimozione notifica dopo annullamento: %v\n", notifErr)
+			} else {
+				fmt.Printf("[FRIENDS SUCCESS] ✅ Notifica rimossa dopo annullamento richiesta %d\n", requestID)
+			}
 		}
 
 		// Risposta di successo

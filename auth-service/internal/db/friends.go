@@ -466,6 +466,80 @@ func (db *Database) SearchUsers(searchTerm string, currentUserID int64) ([]UserS
 	}
 
 	return users, rows.Err()
+
+
+}
+
+func (db *Database) GetLatestFriendRequestID(senderID, receiverID int64) (int64, error) {
+	var requestID int64
+	query := `
+		SELECT id FROM friend_requests 
+		WHERE sender_id = $1 AND receiver_id = $2 AND status = 'pending'
+		ORDER BY created_at DESC 
+		LIMIT 1`
+
+	err := db.Conn.QueryRow(query, senderID, receiverID).Scan(&requestID)
+	if err != nil {
+		return 0, err
+	}
+	return requestID, nil
+}
+
+// GetFriendRequestReceiver ottiene l'ID del destinatario di una richiesta di amicizia
+func (db *Database) GetFriendRequestReceiver(requestID int64) (int64, error) {
+	var receiverID int64
+	query := `SELECT receiver_id FROM friend_requests WHERE id = $1`
+
+	err := db.Conn.QueryRow(query, requestID).Scan(&receiverID)
+	if err != nil {
+		return 0, err
+	}
+	return receiverID, nil
+}
+
+// GetFriendRequestDetails ottiene i dettagli completi di una richiesta di amicizia
+func (db *Database) GetFriendRequestDetails(requestID int64) (*FriendRequestDetails, error) {
+	query := `
+		SELECT 
+			fr.id, fr.sender_id, fr.receiver_id, fr.status, fr.created_at,
+			u_sender.username as sender_username, u_sender.nome as sender_nome, u_sender.cognome as sender_cognome,
+			u_receiver.username as receiver_username, u_receiver.nome as receiver_nome, u_receiver.cognome as receiver_cognome
+		FROM friend_requests fr
+		JOIN users u_sender ON fr.sender_id = u_sender.id
+		JOIN users u_receiver ON fr.receiver_id = u_receiver.id
+		WHERE fr.id = $1`
+
+	var details FriendRequestDetails
+	err := db.Conn.QueryRow(query, requestID).Scan(
+		&details.ID,
+		&details.SenderID,
+		&details.ReceiverID,
+		&details.Status,
+		&details.CreatedAt,
+		&details.SenderUsername,
+		&details.SenderNome,
+		&details.SenderCognome,
+		&details.ReceiverUsername,
+		&details.ReceiverNome,
+		&details.ReceiverCognome,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &details, nil
+}
+
+// GetUserUnreadFriendRequestsCount ottiene il numero di richieste di amicizia non lette
+func (db *Database) GetUserUnreadFriendRequestsCount(userID int64) (int, error) {
+	var count int
+	query := `
+		SELECT COUNT(*) FROM friend_requests 
+		WHERE receiver_id = $1 AND status = 'pending'`
+
+	err := db.Conn.QueryRow(query, userID).Scan(&count)
+	return count, err
 }
 
 // Strutture dati per le funzioni sopra
@@ -500,3 +574,19 @@ type UserSearchResult struct {
 	Email      string `json:"email"`
 	ProfilePic string `json:"profile_picture"`
 }
+
+
+type FriendRequestDetails struct {
+	ID               int64     `json:"id"`
+	SenderID         int64     `json:"sender_id"`
+	ReceiverID       int64     `json:"receiver_id"`
+	Status           string    `json:"status"`
+	CreatedAt        time.Time `json:"created_at"`
+	SenderUsername   string    `json:"sender_username"`
+	SenderNome       string    `json:"sender_nome"`
+	SenderCognome    string    `json:"sender_cognome"`
+	ReceiverUsername string    `json:"receiver_username"`
+	ReceiverNome     string    `json:"receiver_nome"`
+	ReceiverCognome  string    `json:"receiver_cognome"`
+}
+

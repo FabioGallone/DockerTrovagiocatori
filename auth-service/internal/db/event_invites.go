@@ -204,6 +204,17 @@ func (db *Database) GetEventInvites(userID int64) ([]EventInviteInfo, error) {
 	return invites, rows.Err()
 }
 
+// GetUserUnreadEventInvitesCount ottiene il numero di inviti evento non letti
+func (db *Database) GetUserUnreadEventInvitesCount(userID int64) (int, error) {
+	var count int
+	query := `
+		SELECT COUNT(*) FROM event_invites 
+		WHERE receiver_id = $1 AND status = 'pending'`
+
+	err := db.Conn.QueryRow(query, userID).Scan(&count)
+	return count, err
+}
+
 // Struttura per le informazioni dell'invito evento
 type EventInviteInfo struct {
 	InviteID             int64  `json:"invite_id"`
@@ -216,4 +227,60 @@ type EventInviteInfo struct {
 	SenderCognome        string `json:"sender_cognome"`
 	SenderEmail          string `json:"sender_email"`
 	SenderProfilePicture string `json:"sender_profile_picture"`
+}
+
+// GetEventInvitePostID ottiene l'ID del post associato a un invito evento
+func (db *Database) GetEventInvitePostID(inviteID int64) (int64, error) {
+	var postID int64
+	query := `SELECT post_id FROM event_invites WHERE id = $1`
+
+	err := db.Conn.QueryRow(query, inviteID).Scan(&postID)
+	if err != nil {
+		return 0, err
+	}
+	return postID, nil
+}
+
+// GetPostTitleByID ottiene il titolo di un post tramite il suo ID
+func (db *Database) GetPostTitleByID(postID int) (string, error) {
+	// Nota: Questo metodo richiede accesso al database Python
+	// Per ora restituiamo un placeholder, ma dovresti implementare
+	// una tabella locale o fare una chiamata al servizio Python
+	return fmt.Sprintf("Evento #%d", postID), nil
+}
+
+// GetEventInviteDetails ottiene i dettagli completi di un invito evento
+func (db *Database) GetEventInviteDetails(inviteID int64) (*EventInviteDetails, error) {
+	query := `
+		SELECT 
+			ei.id, ei.sender_id, ei.receiver_id, ei.post_id, ei.message, ei.status, ei.created_at,
+			u_sender.username as sender_username, u_sender.nome as sender_nome, u_sender.cognome as sender_cognome,
+			u_receiver.username as receiver_username, u_receiver.nome as receiver_nome, u_receiver.cognome as receiver_cognome
+		FROM event_invites ei
+		JOIN users u_sender ON ei.sender_id = u_sender.id
+		JOIN users u_receiver ON ei.receiver_id = u_receiver.id
+		WHERE ei.id = $1`
+
+	var details EventInviteDetails
+	err := db.Conn.QueryRow(query, inviteID).Scan(
+		&details.ID,
+		&details.SenderID,
+		&details.ReceiverID,
+		&details.PostID,
+		&details.Message,
+		&details.Status,
+		&details.CreatedAt,
+		&details.SenderUsername,
+		&details.SenderNome,
+		&details.SenderCognome,
+		&details.ReceiverUsername,
+		&details.ReceiverNome,
+		&details.ReceiverCognome,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &details, nil
 }

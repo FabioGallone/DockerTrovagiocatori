@@ -4,10 +4,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"trovagiocatoriAuth/internal/db"
 	"trovagiocatoriAuth/internal/handlers"
 	"trovagiocatoriAuth/internal/sessions"
+	"trovagiocatoriAuth/internal/services"
 )
 
 func main() {
@@ -29,15 +32,28 @@ func main() {
 	}
 	defer database.Conn.Close()
 
-	// NUOVO: Crea le tabelle degli amici se non esistono
+	// Crea le tabelle degli amici se non esistono
 	if err := database.CreateFriendsTablesIfNotExists(); err != nil {
 		log.Fatalf("Error creating friends tables: %v", err)
 	}
 
-	// NUOVO: Crea le tabelle degli inviti eventi se non esistono
+	// Crea le tabelle degli inviti eventi se non esistono
 	if err := database.CreateEventInvitesTableIfNotExists(); err != nil {
 		log.Fatalf("Error creating event invites tables: %v", err)
 	}
+
+	// NUOVO: Crea le tabelle delle notifiche se non esistono
+	if err := database.CreateNotificationsTableIfNotExists(); err != nil {
+		log.Fatalf("Error creating notifications tables: %v", err)
+	}
+
+	// NUOVO: Inizializza e avvia il servizio di pulizia notifiche
+	cleanupService := services.NewNotificationCleanupService(database)
+	cleanupService.Start()
+	defer cleanupService.Stop()
+
+	// Stampa statistiche iniziali delle notifiche
+	cleanupService.PrintStats()
 
 	// Inizializza il SessionManager
 	sm := sessions.NewSessionManager()
@@ -72,7 +88,7 @@ func main() {
 	// ENDPOINT PER OTTENERE L'EMAIL DELL'UTENTE (per "I Miei Post")
 	http.HandleFunc("/user/email", handlers.GetUserEmailHandler(database, sm))
 
-	// NUOVI ENDPOINT PER GLI AMICI
+	// ENDPOINT PER GLI AMICI (con notifiche integrate)
 	// Gestione richieste di amicizia
 	http.HandleFunc("/friends/request", handlers.SendFriendRequestHandler(database, sm))  // POST
 	http.HandleFunc("/friends/accept", handlers.AcceptFriendRequestHandler(database, sm)) // POST
@@ -86,17 +102,26 @@ func main() {
 	http.HandleFunc("/friends/list", handlers.GetFriendsListHandler(database, sm))        // GET
 	http.HandleFunc("/friends/requests", handlers.GetFriendRequestsHandler(database, sm)) // GET
 
-	// ENDPOINT AGGIUNTIVI (ora attivi)
+	// ENDPOINT AGGIUNTIVI AMICI
 	http.HandleFunc("/friends/search", handlers.SearchUsersHandler(database, sm))                  // GET
 	http.HandleFunc("/friends/sent-requests", handlers.GetSentFriendRequestsHandler(database, sm)) // GET
 	http.HandleFunc("/friends/cancel", handlers.CancelFriendRequestHandler(database, sm))          // POST
 
-	// NUOVI ENDPOINT PER GLI INVITI EVENTI
+	// ENDPOINT PER GLI INVITI EVENTI (con notifiche integrate)
 	http.HandleFunc("/events/invite", handlers.SendEventInviteHandler(database, sm))          // POST
 	http.HandleFunc("/events/invites", handlers.GetEventInvitesHandler(database, sm))         // GET
 	http.HandleFunc("/events/invite/accept", handlers.AcceptEventInviteHandler(database, sm)) // POST
 	http.HandleFunc("/events/invite/reject", handlers.RejectEventInviteHandler(database, sm)) // POST
 
+	// NUOVI ENDPOINT PER LE NOTIFICHE
+	http.HandleFunc("/notifications", handlers.GetNotificationsHandler(database, sm))                      // GET - Lista notifiche
+	http.HandleFunc("/notifications/summary", handlers.GetNotificationsSummaryHandler(database, sm))       // GET - Riassunto notifiche
+	http.HandleFunc("/notifications/read", handlers.MarkNotificationAsReadHandler(database, sm))           // POST - Segna come letta
+	http.HandleFunc("/notifications/read-all", handlers.MarkAllNotificationsAsReadHandler(database, sm))   // POST - Segna tutte come lette
+	http.HandleFunc("/notifications/delete", handlers.DeleteNotificationHandler(database, sm))             // DELETE - Elimina notifica
+	http.HandleFunc("/notifications/test", handlers.NotificationTestHandler(database, sm))                 // POST - Test notifiche (solo dev)
+
+	log.Println("🔔 Sistema notifiche attivato!")
 	log.Println("Auth service running on port 8080")
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {

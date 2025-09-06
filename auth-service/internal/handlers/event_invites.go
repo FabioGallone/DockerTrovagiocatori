@@ -1,4 +1,4 @@
-// auth-service/internal/handlers/event_invites.go
+// auth-service/internal/handlers/event_invites.go - VERSIONE CON NOTIFICHE
 package handlers
 
 import (
@@ -22,7 +22,7 @@ type EventInviteResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-// SendEventInviteHandler - Invia un invito per un evento a un amico
+// SendEventInviteHandler - Invia un invito per un evento a un amico CON NOTIFICA
 func SendEventInviteHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verifica autenticazione
@@ -95,6 +95,32 @@ func SendEventInviteHandler(database *db.Database, sm *sessions.SessionManager) 
 			return
 		}
 
+		// NUOVO: Ottieni le informazioni del mittente e dell'evento per la notifica
+		senderProfile, err := database.GetUserProfile(fmt.Sprintf("%d", userID))
+		if err != nil {
+			fmt.Printf("[EVENT_INVITE] WARNING: Impossibile ottenere profilo mittente: %v\n", err)
+		}
+
+		// NUOVO: Ottieni il titolo dell'evento per la notifica
+		eventTitle := "Evento sportivo"
+		if postDetails, err := database.GetPostTitleByID(req.PostID); err == nil {
+			eventTitle = postDetails
+		}
+
+		// NUOVO: Crea la notifica per l'invito evento
+		senderUsername := "Utente sconosciuto"
+		if err == nil {
+			senderUsername = senderProfile.Username
+		}
+
+		notifErr := database.CreateEventInviteNotification(friendUserID, userID, int64(req.PostID), senderUsername, eventTitle)
+		if notifErr != nil {
+			fmt.Printf("[EVENT_INVITE] WARNING: Errore creazione notifica: %v\n", notifErr)
+			// Non interrompiamo il flusso per un errore di notifica
+		} else {
+			fmt.Printf("[EVENT_INVITE] ✅ Notifica creata per invito evento da %d a %d\n", userID, friendUserID)
+		}
+
 		fmt.Printf("[EVENT_INVITE] ✅ Invito inviato con successo\n")
 
 		// Risposta di successo
@@ -143,7 +169,7 @@ func GetEventInvitesHandler(database *db.Database, sm *sessions.SessionManager) 
 	}
 }
 
-// AcceptEventInviteHandler - Accetta un invito per un evento
+// AcceptEventInviteHandler - Accetta un invito per un evento e rimuove la notifica
 func AcceptEventInviteHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verifica autenticazione
@@ -172,10 +198,23 @@ func AcceptEventInviteHandler(database *db.Database, sm *sessions.SessionManager
 			return
 		}
 
+		// NUOVO: Ottieni i dettagli dell'invito prima di accettarlo per la notifica
+		postID, getPostIDErr := database.GetEventInvitePostID(inviteID)
+
 		// Accetta l'invito (questo iscriverà automaticamente l'utente all'evento)
 		if err := database.AcceptEventInvite(inviteID, userID); err != nil {
 			http.Error(w, "Errore durante l'accettazione dell'invito", http.StatusInternalServerError)
 			return
+		}
+
+		// NUOVO: Rimuovi la notifica correlata quando l'invito viene accettato
+		if getPostIDErr == nil {
+			notifErr := database.DeleteNotificationByRelated(userID, db.NotificationTypeEventInvite, postID)
+			if notifErr != nil {
+				fmt.Printf("[EVENT_INVITE] WARNING: Errore rimozione notifica dopo accettazione: %v\n", notifErr)
+			} else {
+				fmt.Printf("[EVENT_INVITE] ✅ Notifica rimossa dopo accettazione invito %d\n", inviteID)
+			}
 		}
 
 		// Risposta di successo
@@ -189,7 +228,7 @@ func AcceptEventInviteHandler(database *db.Database, sm *sessions.SessionManager
 	}
 }
 
-// RejectEventInviteHandler - Rifiuta un invito per un evento
+// RejectEventInviteHandler - Rifiuta un invito per un evento e rimuove la notifica
 func RejectEventInviteHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verifica autenticazione
@@ -218,10 +257,23 @@ func RejectEventInviteHandler(database *db.Database, sm *sessions.SessionManager
 			return
 		}
 
+		// NUOVO: Ottieni i dettagli dell'invito prima di rifiutarlo per la notifica
+		postID, getPostIDErr := database.GetEventInvitePostID(inviteID)
+
 		// Rifiuta l'invito
 		if err := database.RejectEventInvite(inviteID, userID); err != nil {
 			http.Error(w, "Errore durante il rifiuto dell'invito", http.StatusInternalServerError)
 			return
+		}
+
+		// NUOVO: Rimuovi la notifica correlata quando l'invito viene rifiutato
+		if getPostIDErr == nil {
+			notifErr := database.DeleteNotificationByRelated(userID, db.NotificationTypeEventInvite, postID)
+			if notifErr != nil {
+				fmt.Printf("[EVENT_INVITE] WARNING: Errore rimozione notifica dopo rifiuto: %v\n", notifErr)
+			} else {
+				fmt.Printf("[EVENT_INVITE] ✅ Notifica rimossa dopo rifiuto invito %d\n", inviteID)
+			}
 		}
 
 		// Risposta di successo
