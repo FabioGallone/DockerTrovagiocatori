@@ -284,3 +284,20 @@ func (db *Database) GetEventInviteDetails(inviteID int64) (*EventInviteDetails, 
 
 	return &details, nil
 }
+
+
+type EventInviteDetails struct {
+	ID               int64     `json:"id"`
+	SenderID         int64     `json:"sender_id"`
+	ReceiverID       int64     `json:"receiver_id"`
+	PostID           int       `json:"post_id"`
+	Message          string    `json:"message"`
+	Status           string    `json:"status"`
+	CreatedAt        time.Time `json:"created_at"`
+	SenderUsername   string    `json:"sender_username"`
+	SenderNome       string    `json:"sender_nome"`
+	SenderCognome    string    `json:"sender_cognome"`
+	ReceiverUsername string    `json:"receiver_username"`
+	ReceiverNome     string    `json:"receiver_nome"`
+	ReceiverCognome  string    `json:"receiver_cognome"`
+}
