@@ -285,7 +285,6 @@ func (db *Database) GetEventInviteDetails(inviteID int64) (*EventInviteDetails, 
 	return &details, nil
 }
 
-
 type EventInviteDetails struct {
 	ID               int64     `json:"id"`
 	SenderID         int64     `json:"sender_id"`
@@ -300,4 +299,141 @@ type EventInviteDetails struct {
 	ReceiverUsername string    `json:"receiver_username"`
 	ReceiverNome     string    `json:"receiver_nome"`
 	ReceiverCognome  string    `json:"receiver_cognome"`
+}
+
+// GetInvitedUserEmailsForPost ottiene le email degli utenti già invitati a un evento
+func (db *Database) GetInvitedUserEmailsForPost(postID int) ([]string, error) {
+	rows, err := db.Conn.Query(`
+		SELECT u.email 
+		FROM event_invites ei
+		JOIN users u ON ei.receiver_id = u.id
+		WHERE ei.post_id = $1 AND ei.status = 'pending'`,
+		postID)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var emails []string
+	for rows.Next() {
+		var email string
+		if err := rows.Scan(&email); err != nil {
+			return nil, err
+		}
+		emails = append(emails, email)
+	}
+
+	return emails, rows.Err()
+}
+
+// GetParticipantEmailsForPost ottiene le email degli utenti già partecipanti a un evento
+func (db *Database) GetParticipantEmailsForPost(postID int) ([]string, error) {
+	rows, err := db.Conn.Query(`
+		SELECT u.email 
+		FROM event_participants ep
+		JOIN users u ON ep.user_id = u.id
+		WHERE ep.post_id = $1 AND ep.status = 'confirmed'`,
+		postID)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var emails []string
+	for rows.Next() {
+		var email string
+		if err := rows.Scan(&email); err != nil {
+			return nil, err
+		}
+		emails = append(emails, email)
+	}
+
+	return emails, rows.Err()
+}
+
+// GetAvailableFriendsForInvite ottiene la lista degli amici che possono essere invitati a un evento
+// (esclude quelli già invitati e quelli già partecipanti)
+func (db *Database) GetAvailableFriendsForInvite(userID int64, postID int) ([]FriendInfo, error) {
+	query := `
+		SELECT 
+			CASE 
+				WHEN f.user1_id = $1 THEN u2.id
+				ELSE u1.id
+			END as friend_id,
+			CASE 
+				WHEN f.user1_id = $1 THEN u2.username
+				ELSE u1.username
+			END as username,
+			CASE 
+				WHEN f.user1_id = $1 THEN u2.nome
+				ELSE u1.nome
+			END as nome,
+			CASE 
+				WHEN f.user1_id = $1 THEN u2.cognome
+				ELSE u1.cognome
+			END as cognome,
+			CASE 
+				WHEN f.user1_id = $1 THEN u2.email
+				ELSE u1.email
+			END as email,
+			CASE 
+				WHEN f.user1_id = $1 THEN u2.profile_picture
+				ELSE u1.profile_picture
+			END as profile_picture,
+			f.created_at
+		FROM friendships f
+		JOIN users u1 ON f.user1_id = u1.id
+		JOIN users u2 ON f.user2_id = u2.id
+		WHERE (f.user1_id = $1 OR f.user2_id = $1)
+		AND CASE 
+			WHEN f.user1_id = $1 THEN u2.id
+			ELSE u1.id
+		END NOT IN (
+			-- Escludi utenti già invitati
+			SELECT ei.receiver_id 
+			FROM event_invites ei 
+			WHERE ei.post_id = $2 AND ei.status = 'pending'
+		)
+		AND CASE 
+			WHEN f.user1_id = $1 THEN u2.id
+			ELSE u1.id
+		END NOT IN (
+			-- Escludi utenti già partecipanti
+			SELECT ep.user_id 
+			FROM event_participants ep 
+			WHERE ep.post_id = $2 AND ep.status = 'confirmed'
+		)
+		ORDER BY f.created_at DESC`
+
+	rows, err := db.Conn.Query(query, userID, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var friends []FriendInfo
+	for rows.Next() {
+		var friend FriendInfo
+		var createdAt time.Time
+
+		err := rows.Scan(
+			&friend.UserID,
+			&friend.Username,
+			&friend.Nome,
+			&friend.Cognome,
+			&friend.Email,
+			&friend.ProfilePic,
+			&createdAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		friend.FriendsSince = createdAt.Format("2006-01-02 15:04:05")
+		friends = append(friends, friend)
+	}
+
+	return friends, rows.Err()
 }

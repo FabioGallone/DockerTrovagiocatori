@@ -5,11 +5,10 @@ import (
 	"net/http"
 	"os"
 
-
 	"trovagiocatoriAuth/internal/db"
 	"trovagiocatoriAuth/internal/handlers"
-	"trovagiocatoriAuth/internal/sessions"
 	"trovagiocatoriAuth/internal/services"
+	"trovagiocatoriAuth/internal/sessions"
 )
 
 func main() {
@@ -113,12 +112,15 @@ func main() {
 	http.HandleFunc("/events/invite/reject", handlers.RejectEventInviteHandler(database, sm)) // POST
 
 	// NUOVI ENDPOINT PER LE NOTIFICHE
-	http.HandleFunc("/notifications", handlers.GetNotificationsHandler(database, sm))                      // GET - Lista notifiche
-	http.HandleFunc("/notifications/summary", handlers.GetNotificationsSummaryHandler(database, sm))       // GET - Riassunto notifiche
-	http.HandleFunc("/notifications/read", handlers.MarkNotificationAsReadHandler(database, sm))           // POST - Segna come letta
-	http.HandleFunc("/notifications/read-all", handlers.MarkAllNotificationsAsReadHandler(database, sm))   // POST - Segna tutte come lette
-	http.HandleFunc("/notifications/delete", handlers.DeleteNotificationHandler(database, sm))             // DELETE - Elimina notifica
-	http.HandleFunc("/notifications/test", handlers.NotificationTestHandler(database, sm))                 // POST - Test notifiche (solo dev)
+	http.HandleFunc("/notifications", handlers.GetNotificationsHandler(database, sm))                    // GET - Lista notifiche
+	http.HandleFunc("/notifications/summary", handlers.GetNotificationsSummaryHandler(database, sm))     // GET - Riassunto notifiche
+	http.HandleFunc("/notifications/read", handlers.MarkNotificationAsReadHandler(database, sm))         // POST - Segna come letta
+	http.HandleFunc("/notifications/read-all", handlers.MarkAllNotificationsAsReadHandler(database, sm)) // POST - Segna tutte come lette
+	http.HandleFunc("/notifications/delete", handlers.DeleteNotificationHandler(database, sm))           // DELETE - Elimina notifica
+	http.HandleFunc("/notifications/test", handlers.NotificationTestHandler(database, sm))               // POST - Test notifiche (solo dev)
+
+	// NUOVO ENDPOINT per ottenere amici disponibili per inviti
+	http.HandleFunc("/friends/available-for-invite", handlers.GetAvailableFriendsForInviteHandler(database, sm)) // GET
 
 	log.Println("🔔 Sistema notifiche attivato!")
 	log.Println("Auth service running on port 8080")

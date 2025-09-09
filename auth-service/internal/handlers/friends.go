@@ -168,6 +168,60 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 	}
 }
 
+// GetAvailableFriendsForInviteHandler - Ottiene gli amici disponibili per essere invitati a un evento
+func GetAvailableFriendsForInviteHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Verifica autenticazione
+		cookie, err := r.Cookie("session_id")
+		if err != nil {
+			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
+			return
+		}
+
+		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		if err != nil {
+			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
+			return
+		}
+
+		// Ottieni post_id dall'URL
+		postIDStr := r.URL.Query().Get("post_id")
+		if postIDStr == "" {
+			http.Error(w, "post_id mancante", http.StatusBadRequest)
+			return
+		}
+
+		postID, err := strconv.Atoi(postIDStr)
+		if err != nil {
+			http.Error(w, "post_id non valido", http.StatusBadRequest)
+			return
+		}
+
+		fmt.Printf("[AVAILABLE_FRIENDS] Ricerca amici disponibili per utente %d e post %d\n", userID, postID)
+
+		// Ottieni gli amici disponibili per l'invito
+		availableFriends, err := database.GetAvailableFriendsForInvite(userID, postID)
+		if err != nil {
+			fmt.Printf("[AVAILABLE_FRIENDS] Errore nel recupero amici disponibili: %v\n", err)
+			http.Error(w, "Errore durante il recupero degli amici disponibili", http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Printf("[AVAILABLE_FRIENDS] Trovati %d amici disponibili per l'invito\n", len(availableFriends))
+
+		// Risposta
+		response := map[string]interface{}{
+			"success":           true,
+			"available_friends": availableFriends,
+			"count":             len(availableFriends),
+			"post_id":           postID,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
 // AcceptFriendRequestHandler - Accetta una richiesta di amicizia e rimuove la notifica
 func AcceptFriendRequestHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
