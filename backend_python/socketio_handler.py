@@ -14,12 +14,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # CORREZIONE: Crea il server Socket.IO con configurazione corretta
+# Correggi la creazione del server Socket.IO
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins="*",  # In produzione, specifica i domini consentiti
+    cors_allowed_origins="*",
     logger=True,
-    engineio_logger=False,  # Riduci il logging per evitare spam
-    # IMPORTANTE: Non specificare un path qui, sarà gestito dall'app ASGI
+    engineio_logger=True,  # Abilita temporaneamente per debug
+    path="/ws/socket.io"  # AGGIUNGI QUESTA LINEA
 )
 
 # Dizionario per tenere traccia degli utenti connessi
@@ -62,6 +63,8 @@ async def connect(sid, environ, auth):
     """Gestisce la connessione di un nuovo utente"""
     try:
         logger.info(f"[SOCKET] Tentativo di connessione per sid: {sid}")
+        logger.info(f"[SOCKET] Environ: {environ.get('PATH_INFO')}")
+        logger.info(f"[SOCKET] Auth: {auth}")
         
         # Verifica autenticazione
         session_cookie = None
