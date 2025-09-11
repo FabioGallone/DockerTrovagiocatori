@@ -118,12 +118,21 @@ func main() {
 	http.HandleFunc("/notifications/read-all", handlers.MarkAllNotificationsAsReadHandler(database, sm)) // POST - Segna tutte come lette
 	http.HandleFunc("/notifications/delete", handlers.DeleteNotificationHandler(database, sm))           // DELETE - Elimina notifica
 	http.HandleFunc("/notifications/test", handlers.NotificationTestHandler(database, sm))               // POST - Test notifiche (solo dev)
-
-	// NUOVO ENDPOINT per ottenere amici disponibili per inviti
+	
+		// NUOVO ENDPOINT per ottenere amici disponibili per inviti
 	http.HandleFunc("/friends/available-for-invite", handlers.GetAvailableFriendsForInviteHandler(database, sm)) // GET
 
 	log.Println("🔔 Sistema notifiche attivato!")
 	log.Println("Auth service running on port 8080")
+	
+	// ENDPOINT AMMINISTRATORE
+	http.HandleFunc("/admin/posts/", handlers.AdminDeletePostHandler(database, sm))
+	http.HandleFunc("/admin/comments/", handlers.AdminDeleteCommentHandler(database, sm))
+
+	log.Println("🔧 Endpoint amministratore configurati!")
+	log.Println("Auth service running on port 8080")
+	
+
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)

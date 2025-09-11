@@ -1,3 +1,4 @@
+import datetime
 from typing import List
 from fastapi import FastAPI, HTTPException, Depends
 import requests
@@ -536,6 +537,107 @@ def root():
 def health_check():
     """Endpoint per verificare lo stato dell'API"""
     return {"status": "healthy", "service": "trovagiocatori-api"}
+
+
+# ========== ENDPOINT AMMINISTRATORE ==========
+
+def verify_admin_user(request: Request):
+    """Verifica che l'utente sia un amministratore"""
+    try:
+        user_email = get_current_user_email(request)
+        
+        # Chiama l'auth service per verificare se è admin
+        session_cookie = request.cookies.get("session_id")
+        auth_response = requests.get(
+            "http://auth-service:8080/profile",
+            cookies={"session_id": session_cookie},
+            timeout=5
+        )
+        
+        if auth_response.status_code != 200:
+            raise HTTPException(status_code=403, detail="Non autorizzato")
+        
+        user_data = auth_response.json()
+        if not user_data.get("is_admin", False):
+            print(f"[ADMIN] Accesso negato per {user_email}: non è admin")
+            raise HTTPException(status_code=403, detail="Privilegi amministratore richiesti")
+        
+        print(f"[ADMIN] Accesso consentito per admin {user_email}")
+        return user_email
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ADMIN] Errore verifica admin: {e}")
+        raise HTTPException(status_code=500, detail="Errore verifica privilegi admin")
+
+@app.delete("/admin/posts/{post_id}")
+def admin_delete_post(post_id: int, request: Request, db: Session = Depends(get_db)):
+    """Elimina un post (solo amministratori)"""
+    # Verifica privilegi admin
+    admin_email = verify_admin_user(request)
+    
+    # Trova il post
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        print(f"[ADMIN] Post {post_id} non trovato")
+        raise HTTPException(status_code=404, detail="Post non trovato")
+    
+    print(f"[ADMIN] Eliminazione post {post_id}: '{post.titolo}' di {post.autore_email}")
+    
+    # Elimina il post (i commenti vengono eliminati automaticamente per cascade)
+    db.delete(post)
+    db.commit()
+    
+    print(f"[ADMIN] ✅ Post {post_id} eliminato dall'amministratore {admin_email}")
+    
+    return {
+        "success": True,
+        "message": f"Post {post_id} eliminato con successo",
+        "deleted_by": admin_email
+    }
+
+@app.delete("/admin/comments/{comment_id}")
+def admin_delete_comment(comment_id: int, request: Request, db: Session = Depends(get_db)):
+    """Elimina un commento (solo amministratori)"""
+    # Verifica privilegi admin
+    admin_email = verify_admin_user(request)
+    
+    # Trova il commento
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if not comment:
+        print(f"[ADMIN] Commento {comment_id} non trovato")
+        raise HTTPException(status_code=404, detail="Commento non trovato")
+    
+    print(f"[ADMIN] Eliminazione commento {comment_id} del post {comment.post_id}")
+    
+    # Elimina il commento
+    db.delete(comment)
+    db.commit()
+    
+    print(f"[ADMIN] ✅ Commento {comment_id} eliminato dall'amministratore {admin_email}")
+    
+    return {
+        "success": True,
+        "message": f"Commento {comment_id} eliminato con successo",
+        "deleted_by": admin_email
+    }
+
+@app.get("/admin/stats")
+def get_admin_stats(request: Request, db: Session = Depends(get_db)):
+    """Statistiche per amministratori"""
+    # Verifica privilegi admin
+    verify_admin_user(request)
+    
+    total_posts = db.query(Post).count()
+    total_comments = db.query(Comment).count()
+    total_fields = db.query(SportField).count()
+    
+    return {
+        "total_posts": total_posts,
+        "total_comments": total_comments,
+        "total_sport_fields": total_fields,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 # IMPORTANTE: Esporta l'app ASGI corretta per uvicorn
 app = sio_asgi_app

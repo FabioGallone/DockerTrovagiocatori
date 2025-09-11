@@ -7,6 +7,7 @@ type User struct {
 	Cognome    string `json:"cognome"`
 	Username   string `json:"username"`
 	Email      string `json:"email"`
-	Password   string `json:"-"`                         // Nascondiamo la password nella risposta JSON
-	ProfilePic string `json:"profile_picture,omitempty"` // Percorso dell'immagine profilo (opzionale)
+	Password   string `json:"-"`                         
+	ProfilePic string `json:"profile_picture,omitempty"` 
+	IsAdmin    bool   `json:"is_admin"`                 
 }

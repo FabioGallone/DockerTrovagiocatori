@@ -44,11 +44,23 @@ func migrateDatabase(db *sql.DB) error {
 		username TEXT NOT NULL UNIQUE,
 		email TEXT NOT NULL UNIQUE,
 		password TEXT NOT NULL,
-		profile_picture TEXT
+		profile_picture TEXT,
+		is_admin BOOLEAN DEFAULT FALSE
 	);
 	`)
 	if err != nil {
 		return fmt.Errorf("errore nella creazione del database: %v", err)
+	}
+
+	// Inserisci l'utente amministratore se non esiste
+
+	_, err = db.Exec(`
+	INSERT INTO users (nome, cognome, username, email, password, is_admin, profile_picture) 
+	VALUES ('Admin', 'Sistema', 'admin', 'admin@trovagiocatori.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', TRUE, NULL)
+	ON CONFLICT (email) DO UPDATE SET is_admin = TRUE;
+	`)
+	if err != nil {
+		return fmt.Errorf("errore nell'inserimento dell'admin: %v", err)
 	}
 
 	// Nuova tabella per i preferiti
@@ -81,6 +93,7 @@ func migrateDatabase(db *sql.DB) error {
 	}
 
 	fmt.Println("✔ Database migrato con successo!")
+	fmt.Println("✔ Admin creato: admin@trovagiocatori.com / password")
 	return nil
 }
 
@@ -123,10 +136,11 @@ func (db *Database) VerifyUser(emailOrUsername, password string) (int64, error) 
 }
 
 func (db *Database) GetUserProfile(userID string) (models.User, error) {
-	print("sto entrando qua dentro")
 	var user models.User
-	query := `SELECT id, nome, cognome, username, email, password, profile_picture FROM users WHERE id = $1`
-	err := db.Conn.QueryRow(query, userID).Scan(&user.ID, &user.Nome, &user.Cognome, &user.Username, &user.Email, &user.Password, &user.ProfilePic)
+	query := `SELECT id, nome, cognome, username, email, password, profile_picture, COALESCE(is_admin, false) FROM users WHERE id = $1`
+	err := db.Conn.QueryRow(query, userID).Scan(
+		&user.ID, &user.Nome, &user.Cognome, &user.Username, 
+		&user.Email, &user.Password, &user.ProfilePic, &user.IsAdmin)
 	if err != nil {
 		return user, err
 	}
@@ -343,4 +357,27 @@ func (db *Database) GetUserParticipations(userID int64) ([]int, error) {
 	}
 
 	return participations, rows.Err()
+}
+
+// CheckUserIsAdmin verifica se un utente è amministratore
+func (db *Database) CheckUserIsAdmin(userID int64) (bool, error) {
+	var isAdmin bool
+	err := db.Conn.QueryRow("SELECT COALESCE(is_admin, false) FROM users WHERE id = $1", userID).Scan(&isAdmin)
+	if err != nil {
+		return false, err
+	}
+	return isAdmin, nil
+}
+
+// GetUserProfileWithAdmin ottiene il profilo utente incluso lo status admin
+func (db *Database) GetUserProfileWithAdmin(userID string) (models.User, error) {
+	var user models.User
+	query := `SELECT id, nome, cognome, username, email, password, profile_picture, COALESCE(is_admin, false) FROM users WHERE id = $1`
+	err := db.Conn.QueryRow(query, userID).Scan(
+		&user.ID, &user.Nome, &user.Cognome, &user.Username, 
+		&user.Email, &user.Password, &user.ProfilePic, &user.IsAdmin)
+	if err != nil {
+		return user, err
+	}
+	return user, nil
 }

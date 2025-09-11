@@ -131,8 +131,6 @@ func ServeProfilePicture(w http.ResponseWriter, r *http.Request) {
 
 // ProfileBySessionHandler restituisce i dati del profilo come JSON,
 // ricavando l'ID utente dal cookie di sessione senza richiedere "/profile/{id}"
-// auth.go
-
 func ProfileBySessionHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Recupera il cookie di sessione
@@ -155,15 +153,15 @@ func ProfileBySessionHandler(database *db.Database, sm *sessions.SessionManager)
 
 		log.Printf("ProfileBySessionHandler: Retrieved userID=%d for session_id=%s\n", userID, cookie.Value)
 
-		// Recupera i dati utente dal database
-		user, err := database.GetUserProfile(fmt.Sprintf("%d", userID))
+		// Recupera i dati utente dal database INCLUDENDO is_admin
+		user, err := database.GetUserProfileWithAdmin(fmt.Sprintf("%d", userID))
 		if err != nil {
-			log.Printf("ProfileBySessionHandler: UserID=%d not found\n", userID)
+			log.Printf("ProfileBySessionHandler: UserID=%d not found, err=%v\n", userID, err)
 			http.Error(w, "Utente non trovato", http.StatusNotFound)
 			return
 		}
 
-		log.Printf("ProfileBySessionHandler: Retrieved user data for userID=%d\n", userID)
+		log.Printf("ProfileBySessionHandler: Retrieved user data for userID=%d, isAdmin=%t\n", userID, user.IsAdmin)
 
 		// Risponde in JSON
 		w.Header().Set("Content-Type", "application/json")
@@ -193,9 +191,10 @@ func UserHandler(database *db.Database, sm *sessions.SessionManager) http.Handle
 			return
 		}
 
-		// Recupera il profilo dell'utente dal database
-		user, err := database.GetUserProfile(fmt.Sprintf("%d", userID))
+		// Recupera il profilo dell'utente dal database USANDO LA FUNZIONE CON ADMIN
+		user, err := database.GetUserProfileWithAdmin(fmt.Sprintf("%d", userID))
 		if err != nil {
+			log.Printf("UserHandler: UserID=%d not found, err=%v\n", userID, err)
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
@@ -224,19 +223,20 @@ func GetUserByEmailHandler(database *db.Database, sm *sessions.SessionManager) h
 		// Query al database
 		var user models.User
 		err := database.Conn.QueryRow(`
-            SELECT id, nome, cognome, username, email, profile_picture 
+            SELECT id, nome, cognome, username, email, profile_picture, COALESCE(is_admin, false) 
             FROM users 
             WHERE email = $1`, email).Scan(
-			&user.ID, &user.Nome, &user.Cognome, &user.Username, &user.Email, &user.ProfilePic,
+			&user.ID, &user.Nome, &user.Cognome, &user.Username, &user.Email, &user.ProfilePic, &user.IsAdmin,
 		)
 
 		switch {
 		case err == sql.ErrNoRows:
 			http.Error(w, "User not found", http.StatusNotFound)
 		case err != nil:
+			log.Printf("GetUserByEmailHandler: DB error for email %s: %v\n", email, err)
 			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
 		default:
-			log.Println("ProfilePic:", user.ProfilePic)
+			log.Printf("GetUserByEmailHandler: Found user %s, isAdmin=%t\n", user.Email, user.IsAdmin)
 
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(user)
