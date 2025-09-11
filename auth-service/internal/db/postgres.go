@@ -137,13 +137,32 @@ func (db *Database) VerifyUser(emailOrUsername, password string) (int64, error) 
 
 func (db *Database) GetUserProfile(userID string) (models.User, error) {
 	var user models.User
+	var profilePic sql.NullString // Usa sql.NullString per gestire NULL
+	var isAdmin sql.NullBool      // Usa sql.NullBool per gestire NULL
+	
 	query := `SELECT id, nome, cognome, username, email, password, profile_picture, COALESCE(is_admin, false) FROM users WHERE id = $1`
 	err := db.Conn.QueryRow(query, userID).Scan(
 		&user.ID, &user.Nome, &user.Cognome, &user.Username, 
-		&user.Email, &user.Password, &user.ProfilePic, &user.IsAdmin)
+		&user.Email, &user.Password, &profilePic, &isAdmin)
+	
 	if err != nil {
 		return user, err
 	}
+	
+	// Gestisci il valore NULL per profile_picture
+	if profilePic.Valid {
+		user.ProfilePic = profilePic.String
+	} else {
+		user.ProfilePic = "" // Valore di default se NULL
+	}
+	
+	// Gestisci il valore NULL per is_admin
+	if isAdmin.Valid {
+		user.IsAdmin = isAdmin.Bool
+	} else {
+		user.IsAdmin = false // Default a false se NULL
+	}
+	
 	return user, nil
 }
 
@@ -372,12 +391,23 @@ func (db *Database) CheckUserIsAdmin(userID int64) (bool, error) {
 // GetUserProfileWithAdmin ottiene il profilo utente incluso lo status admin
 func (db *Database) GetUserProfileWithAdmin(userID string) (models.User, error) {
 	var user models.User
+	var profilePic sql.NullString // Usa sql.NullString per gestire NULL
+	
 	query := `SELECT id, nome, cognome, username, email, password, profile_picture, COALESCE(is_admin, false) FROM users WHERE id = $1`
 	err := db.Conn.QueryRow(query, userID).Scan(
 		&user.ID, &user.Nome, &user.Cognome, &user.Username, 
-		&user.Email, &user.Password, &user.ProfilePic, &user.IsAdmin)
+		&user.Email, &user.Password, &profilePic, &user.IsAdmin)
+	
 	if err != nil {
 		return user, err
 	}
+	
+	// Gestisci il valore NULL per profile_picture
+	if profilePic.Valid {
+		user.ProfilePic = profilePic.String
+	} else {
+		user.ProfilePic = "" // Valore di default se NULL
+	}
+	
 	return user, nil
 }

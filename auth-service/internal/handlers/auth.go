@@ -212,7 +212,6 @@ func UserHandler(database *db.Database, sm *sessions.SessionManager) http.Handle
 
 func GetUserByEmailHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
 		// Estrazione email
 		email := r.URL.Query().Get("email")
 		if email == "" {
@@ -220,14 +219,23 @@ func GetUserByEmailHandler(database *db.Database, sm *sessions.SessionManager) h
 			return
 		}
 
-		// Query al database
+		// Query al database con gestione NULL
 		var user models.User
+		var profilePic sql.NullString
+		
 		err := database.Conn.QueryRow(`
             SELECT id, nome, cognome, username, email, profile_picture, COALESCE(is_admin, false) 
             FROM users 
             WHERE email = $1`, email).Scan(
-			&user.ID, &user.Nome, &user.Cognome, &user.Username, &user.Email, &user.ProfilePic, &user.IsAdmin,
+			&user.ID, &user.Nome, &user.Cognome, &user.Username, &user.Email, &profilePic, &user.IsAdmin,
 		)
+
+		// Gestisci il valore NULL per profile_picture
+		if profilePic.Valid {
+			user.ProfilePic = profilePic.String
+		} else {
+			user.ProfilePic = ""
+		}
 
 		switch {
 		case err == sql.ErrNoRows:
