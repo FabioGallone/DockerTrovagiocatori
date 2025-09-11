@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	// Leggi le variabili d'ambiente per il database
 	host := os.Getenv("DB_HOST")
 	user := os.Getenv("DB_USER")
@@ -40,12 +39,17 @@ func main() {
 		log.Fatalf("Error creating event invites tables: %v", err)
 	}
 
-	// NUOVO: Crea le tabelle delle notifiche se non esistono
+	// Crea le tabelle delle notifiche se non esistono
 	if err := database.CreateNotificationsTableIfNotExists(); err != nil {
 		log.Fatalf("Error creating notifications tables: %v", err)
 	}
 
-	// NUOVO: Inizializza e avvia il servizio di pulizia notifiche
+	// NUOVO: Aggiorna tabella users con campi admin
+	if err := database.CreateUsersTableWithAdminFields(); err != nil {
+		log.Fatalf("Error updating users table with admin fields: %v", err)
+	}
+
+	// Inizializza e avvia il servizio di pulizia notifiche
 	cleanupService := services.NewNotificationCleanupService(database)
 	cleanupService.Start()
 	defer cleanupService.Stop()
@@ -56,37 +60,35 @@ func main() {
 	// Inizializza il SessionManager
 	sm := sessions.NewSessionManager()
 
-	// Registrazione degli endpoint esistenti
+	// ========== ENDPOINT AUTENTICAZIONE ==========
 	http.HandleFunc("/register", handlers.RegisterHandler(database, sm))
 	http.HandleFunc("/login", handlers.LoginHandler(database, sm))
 	http.HandleFunc("/logout", handlers.LogoutHandler(sm))
 
+	// ========== ENDPOINT PROFILO UTENTE ==========
 	http.HandleFunc("/profile", handlers.ProfileBySessionHandler(database, sm))
 	http.HandleFunc("/images/", handlers.ServeProfilePicture)
 	http.HandleFunc("/api/user", handlers.UserHandler(database, sm))
-
 	http.HandleFunc("/api/user/by-email", handlers.GetUserByEmailHandler(database, sm))
 	http.HandleFunc("/update-password", handlers.UpdatePasswordHandler(database, sm))
 
-	// ENDPOINT PER I PREFERITI
+	// ========== ENDPOINT PREFERITI ==========
 	http.HandleFunc("/favorites/add", handlers.AddFavoriteHandler(database, sm))
 	http.HandleFunc("/favorites/remove", handlers.RemoveFavoriteHandler(database, sm))
 	http.HandleFunc("/favorites/check/", handlers.CheckFavoriteHandler(database, sm))
 	http.HandleFunc("/favorites", handlers.GetUserFavoritesHandler(database, sm))
 
-	// ENDPOINT PER LA PARTECIPAZIONE AGLI EVENTI
+	// ========== ENDPOINT PARTECIPAZIONE EVENTI ==========
 	http.HandleFunc("/events/join", handlers.JoinEventHandler(database, sm))
 	http.HandleFunc("/events/leave", handlers.LeaveEventHandler(database, sm))
 	http.HandleFunc("/events/check/", handlers.CheckParticipationHandler(database, sm))
 	http.HandleFunc("/events/", handlers.GetEventParticipantsHandler(database, sm)) // events/{id}/participants
 
-	// ENDPOINT PER LE PARTECIPAZIONI DELL'UTENTE (per il calendario)
+	// ========== ENDPOINT PARTECIPAZIONI UTENTE ==========
 	http.HandleFunc("/user/participations", handlers.GetUserParticipationsHandler(database, sm))
-
-	// ENDPOINT PER OTTENERE L'EMAIL DELL'UTENTE (per "I Miei Post")
 	http.HandleFunc("/user/email", handlers.GetUserEmailHandler(database, sm))
 
-	// ENDPOINT PER GLI AMICI (con notifiche integrate)
+	// ========== ENDPOINT AMICI ==========
 	// Gestione richieste di amicizia
 	http.HandleFunc("/friends/request", handlers.SendFriendRequestHandler(database, sm))  // POST
 	http.HandleFunc("/friends/accept", handlers.AcceptFriendRequestHandler(database, sm)) // POST
@@ -100,39 +102,41 @@ func main() {
 	http.HandleFunc("/friends/list", handlers.GetFriendsListHandler(database, sm))        // GET
 	http.HandleFunc("/friends/requests", handlers.GetFriendRequestsHandler(database, sm)) // GET
 
-	// ENDPOINT AGGIUNTIVI AMICI
+	// Endpoint aggiuntivi amici
 	http.HandleFunc("/friends/search", handlers.SearchUsersHandler(database, sm))                  // GET
 	http.HandleFunc("/friends/sent-requests", handlers.GetSentFriendRequestsHandler(database, sm)) // GET
 	http.HandleFunc("/friends/cancel", handlers.CancelFriendRequestHandler(database, sm))          // POST
 
-	// ENDPOINT PER GLI INVITI EVENTI (con notifiche integrate)
+	// ========== ENDPOINT INVITI EVENTI ==========
 	http.HandleFunc("/events/invite", handlers.SendEventInviteHandler(database, sm))          // POST
 	http.HandleFunc("/events/invites", handlers.GetEventInvitesHandler(database, sm))         // GET
 	http.HandleFunc("/events/invite/accept", handlers.AcceptEventInviteHandler(database, sm)) // POST
 	http.HandleFunc("/events/invite/reject", handlers.RejectEventInviteHandler(database, sm)) // POST
 
-	// NUOVI ENDPOINT PER LE NOTIFICHE
+	// Endpoint per amici disponibili per inviti
+	http.HandleFunc("/friends/available-for-invite", handlers.GetAvailableFriendsForInviteHandler(database, sm)) // GET
+
+	// ========== ENDPOINT NOTIFICHE ==========
 	http.HandleFunc("/notifications", handlers.GetNotificationsHandler(database, sm))                    // GET - Lista notifiche
 	http.HandleFunc("/notifications/summary", handlers.GetNotificationsSummaryHandler(database, sm))     // GET - Riassunto notifiche
 	http.HandleFunc("/notifications/read", handlers.MarkNotificationAsReadHandler(database, sm))         // POST - Segna come letta
 	http.HandleFunc("/notifications/read-all", handlers.MarkAllNotificationsAsReadHandler(database, sm)) // POST - Segna tutte come lette
 	http.HandleFunc("/notifications/delete", handlers.DeleteNotificationHandler(database, sm))           // DELETE - Elimina notifica
 	http.HandleFunc("/notifications/test", handlers.NotificationTestHandler(database, sm))               // POST - Test notifiche (solo dev)
-	
-		// NUOVO ENDPOINT per ottenere amici disponibili per inviti
-	http.HandleFunc("/friends/available-for-invite", handlers.GetAvailableFriendsForInviteHandler(database, sm)) // GET
 
+	// ========== ENDPOINT AMMINISTRATORE ==========
+	http.HandleFunc("/admin/posts/", handlers.AdminDeletePostHandler(database, sm))       // DELETE - Elimina post
+	http.HandleFunc("/admin/comments/", handlers.AdminDeleteCommentHandler(database, sm)) // DELETE - Elimina commento
+	http.HandleFunc("/admin/users", handlers.AdminGetUsersHandler(database, sm))          // GET - Lista utenti
+	http.HandleFunc("/admin/users/", handlers.AdminToggleUserStatusHandler(database, sm)) // POST - Toggle status utente
+	http.HandleFunc("/admin/stats", handlers.AdminStatsHandler(database, sm))             // GET - Statistiche dashboard
+
+	// ========== AVVIO SERVER ==========
 	log.Println("🔔 Sistema notifiche attivato!")
-	log.Println("Auth service running on port 8080")
-	
-	// ENDPOINT AMMINISTRATORE
-	http.HandleFunc("/admin/posts/", handlers.AdminDeletePostHandler(database, sm))
-	http.HandleFunc("/admin/comments/", handlers.AdminDeleteCommentHandler(database, sm))
-
+	log.Println("🤝 Sistema amici configurato!")
+	log.Println("🎉 Sistema inviti eventi configurato!")
 	log.Println("🔧 Endpoint amministratore configurati!")
-	log.Println("Auth service running on port 8080")
-	
-
+	log.Println("🚀 Auth service running on port 8080")
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)

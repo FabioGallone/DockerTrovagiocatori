@@ -378,15 +378,6 @@ func (db *Database) GetUserParticipations(userID int64) ([]int, error) {
 	return participations, rows.Err()
 }
 
-// CheckUserIsAdmin verifica se un utente è amministratore
-func (db *Database) CheckUserIsAdmin(userID int64) (bool, error) {
-	var isAdmin bool
-	err := db.Conn.QueryRow("SELECT COALESCE(is_admin, false) FROM users WHERE id = $1", userID).Scan(&isAdmin)
-	if err != nil {
-		return false, err
-	}
-	return isAdmin, nil
-}
 
 // GetUserProfileWithAdmin ottiene il profilo utente incluso lo status admin
 func (db *Database) GetUserProfileWithAdmin(userID string) (models.User, error) {

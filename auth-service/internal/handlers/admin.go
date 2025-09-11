@@ -1,3 +1,4 @@
+// auth-service/internal/handlers/admin.go
 package handlers
 
 import (
@@ -6,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"trovagiocatoriAuth/internal/db"
 	"trovagiocatoriAuth/internal/sessions"
@@ -171,4 +173,158 @@ func AdminDeleteCommentHandler(database *db.Database, sm *sessions.SessionManage
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	})
+}
+
+// AdminGetUsersHandler restituisce tutti gli utenti per il pannello admin
+func AdminGetUsersHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("[ADMIN] Richiesta lista utenti\n")
+
+		users, err := database.GetAllUsers()
+		if err != nil {
+			fmt.Printf("[ADMIN] Errore nel recupero utenti: %v\n", err)
+			http.Error(w, "Errore interno del server", http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Printf("[ADMIN] ✅ Recuperati %d utenti\n", len(users))
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+	})
+}
+
+// AdminToggleUserStatusHandler attiva/disattiva un utente
+func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+		// Estrai user_id dall'URL
+		pathParts := strings.Split(r.URL.Path, "/")
+		if len(pathParts) < 5 {
+			http.Error(w, "User ID mancante nell'URL", http.StatusBadRequest)
+			return
+		}
+
+		userID, err := strconv.ParseInt(pathParts[len(pathParts)-2], 10, 64)
+		if err != nil {
+			http.Error(w, "User ID non valido", http.StatusBadRequest)
+			return
+		}
+
+		fmt.Printf("[ADMIN] Tentativo toggle status utente %d\n", userID)
+
+		// Verifica che non si stia disattivando se stesso
+		cookie, _ := r.Cookie("session_id")
+		adminUserID, err := sm.GetUserIDBySessionID(cookie.Value)
+		if err != nil {
+			http.Error(w, "Sessione non valida", http.StatusUnauthorized)
+			return
+		}
+
+		if adminUserID == userID {
+			http.Error(w, "Non puoi disattivare il tuo stesso account", http.StatusBadRequest)
+			return
+		}
+
+		// Toggle dello status utente
+		newStatus, err := database.ToggleUserStatus(userID)
+		if err != nil {
+			fmt.Printf("[ADMIN] Errore toggle status utente %d: %v\n", userID, err)
+			http.Error(w, "Errore nella modifica dello status utente", http.StatusInternalServerError)
+			return
+		}
+
+		statusText := "disattivato"
+		if newStatus {
+			statusText = "riattivato"
+		}
+
+		fmt.Printf("[ADMIN] ✅ Utente %d %s con successo\n", userID, statusText)
+
+		response := map[string]interface{}{
+			"success":    true,
+			"message":    fmt.Sprintf("Utente %s con successo", statusText),
+			"user_id":    userID,
+			"new_status": newStatus,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	})
+}
+
+// AdminStatsHandler restituisce statistiche per il dashboard admin
+func AdminStatsHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("[ADMIN] Richiesta statistiche dashboard\n")
+
+		// Ottieni statistiche dal database Go
+		totalUsers, err := database.GetTotalUsersCount()
+		if err != nil {
+			fmt.Printf("[ADMIN] Errore nel conteggio utenti: %v\n", err)
+			totalUsers = 0
+		}
+
+		// Chiama il backend Python per le altre statistiche
+		pythonURL := "http://backend_python:8000/admin/stats"
+		
+		cookie, _ := r.Cookie("session_id")
+		
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", pythonURL, nil)
+		if err != nil {
+			fmt.Printf("[ADMIN] Error creating request to Python: %v\n", err)
+			http.Error(w, "Errore interno", http.StatusInternalServerError)
+			return
+		}
+		
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("[ADMIN] Error calling Python backend: %v\n", err)
+			http.Error(w, "Errore comunicazione con backend", http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+
+		var pythonStats map[string]interface{}
+		if resp.StatusCode == 200 {
+			json.NewDecoder(resp.Body).Decode(&pythonStats)
+		} else {
+			pythonStats = make(map[string]interface{})
+		}
+
+		// Combina le statistiche
+		stats := map[string]interface{}{
+			"total_users":        totalUsers,
+			"total_posts":        getIntFromMap(pythonStats, "total_posts", 0),
+			"total_comments":     getIntFromMap(pythonStats, "total_comments", 0),
+			"total_sport_fields": getIntFromMap(pythonStats, "total_sport_fields", 0),
+			"generated_at":       time.Now().Format("2006-01-02 15:04:05"),
+		}
+
+		fmt.Printf("[ADMIN] ✅ Statistiche generate: %+v\n", stats)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(stats)
+	})
+}
+
+// Helper function per estrarre interi da map
+func getIntFromMap(m map[string]interface{}, key string, defaultValue int) int {
+	if val, exists := m[key]; exists {
+		switch v := val.(type) {
+		case int:
+			return v
+		case float64:
+			return int(v)
+		case string:
+			if intVal, err := strconv.Atoi(v); err == nil {
+				return intVal
+			}
+		}
+	}
+	return defaultValue
 }
