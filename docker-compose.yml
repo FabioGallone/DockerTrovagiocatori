@@ -11,6 +11,7 @@ services:
       - ./internal/db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./migration_add_livello.sql:/docker-entrypoint-initdb.d/migration_add_livello.sql
       - ./migration_add_iscrizioni.sql:/docker-entrypoint-initdb.d/migration_add_iscrizioni.sql
+      # RIMOSSA: ./migration_add_user_bans.sql (ora creata via codice Go)
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
@@ -19,7 +20,7 @@ services:
     build: ./auth-service
     container_name: my_auth_service
     ports:
-      - "8080:8080"  # Porta esposta per comunicare con il frontend
+      - "8080:8080"
     environment:
       DB_HOST: db
       DB_USER: APG
@@ -35,7 +36,7 @@ services:
     build: ./backend_python
     container_name: my_backend_python
     ports:
-      - "8000:8000"  # Porta FastAPI e Socket.IO
+      - "8000:8000"
     environment:
       DB_HOST: db
       DB_USER: APG
@@ -43,7 +44,7 @@ services:
       DB_NAME: ProgCarc
     depends_on:
       - db
-      - auth-service  # Il backend Python dipende dall'auth service
+      - auth-service
     restart: always
 
 volumes:

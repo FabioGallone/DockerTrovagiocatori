@@ -44,6 +44,18 @@ func main() {
 		log.Fatalf("Error creating notifications tables: %v", err)
 	}
 
+	// NUOVO: Crea le tabelle dei ban se non esistono
+	if err := database.CreateBanTablesIfNotExists(); err != nil {
+		log.Fatalf("Error creating ban tables: %v", err)
+	}
+
+	// NUOVO: Pulisce ban scaduti all'avvio
+	if err := database.CleanupExpiredBans(); err != nil {
+		log.Printf("Warning: Error cleaning expired bans: %v", err)
+	} else {
+		log.Println("✔ Ban scaduti puliti all'avvio")
+	}
+
 	// NUOVO: Aggiorna tabella users con campi admin
 	if err := database.CreateUsersTableWithAdminFields(); err != nil {
 		log.Fatalf("Error updating users table with admin fields: %v", err)
@@ -130,6 +142,22 @@ func main() {
 	http.HandleFunc("/admin/users", handlers.AdminGetUsersHandler(database, sm))          // GET - Lista utenti
 	http.HandleFunc("/admin/users/", handlers.AdminToggleUserStatusHandler(database, sm)) // POST - Toggle status utente
 	http.HandleFunc("/admin/stats", handlers.AdminStatsHandler(database, sm))             // GET - Statistiche dashboard
+
+	// ========== NUOVI ENDPOINT BAN UTENTI ==========
+	http.HandleFunc("/admin/bans", handlers.GetActiveBansHandler(database, sm))             // GET - Lista ban attivi
+	http.HandleFunc("/admin/ban/user", handlers.BanUserHandler(database, sm))               // POST - Banna utente manualmente
+	http.HandleFunc("/admin/unban/", handlers.UnbanUserHandler(database, sm))               // POST - Rimuovi ban (URL: /admin/unban/{userID})
+	http.HandleFunc("/admin/ban/info/", handlers.GetUserBanHandler(database, sm))           // GET - Info ban utente
+	http.HandleFunc("/admin/ban/history/", handlers.GetUserBanHistoryHandler(database, sm)) // GET - Cronologia ban utente
+	http.HandleFunc("/admin/ban/stats", handlers.GetBanStatsHandler(database, sm))          // GET - Statistiche ban
+
+	// ========== AVVIO SERVER ==========
+	log.Println("🔔 Sistema notifiche attivato!")
+	log.Println("🤝 Sistema amici configurato!")
+	log.Println("🎉 Sistema inviti eventi configurato!")
+	log.Println("🔧 Endpoint amministratore configurati!")
+	log.Println("🚫 Sistema ban utenti attivato!") // NUOVO LOG
+	log.Println("🚀 Auth service running on port 8080")
 
 	// ========== AVVIO SERVER ==========
 	log.Println("🔔 Sistema notifiche attivato!")
