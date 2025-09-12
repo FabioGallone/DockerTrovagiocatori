@@ -641,3 +641,346 @@ def get_admin_stats(request: Request, db: Session = Depends(get_db)):
 
 # IMPORTANTE: Esporta l'app ASGI corretta per uvicorn
 app = sio_asgi_app
+
+
+@app.get("/admin/posts")
+def get_admin_posts(request: Request, db: Session = Depends(get_db)):
+    """Lista tutti i post per admin con statistiche partecipanti"""
+    # Verifica privilegi admin
+    verify_admin_user(request)
+    
+    query = """
+        SELECT 
+            p.id, p.titolo, p.autore_email, p.sport, p.citta, p.provincia,
+            p.data_partita, p.ora_partita, p.numero_giocatori, p.livello,
+            p.created_at,
+            COUNT(ep.user_id) as partecipanti_iscritti
+        FROM posts p
+        LEFT JOIN event_participants ep ON p.id = ep.post_id AND ep.status = 'confirmed'
+        GROUP BY p.id, p.titolo, p.autore_email, p.sport, p.citta, p.provincia,
+                 p.data_partita, p.ora_partita, p.numero_giocatori, p.livello, p.created_at
+        ORDER BY p.created_at DESC
+    """
+    
+    try:
+        result = db.execute(query)
+        posts = []
+        
+        for row in result:
+            # Determina lo status del post
+            posti_liberi = max(0, row.numero_giocatori - row.partecipanti_iscritti)
+            status = "Completo" if posti_liberi == 0 else "Aperto"
+            
+            post = {
+                "id": row.id,
+                "titolo": row.titolo,
+                "autore_email": row.autore_email,
+                "sport": row.sport,
+                "citta": row.citta,
+                "provincia": row.provincia,
+                "data_creazione": row.created_at,
+                "data_partita": row.data_partita,
+                "numero_giocatori": row.numero_giocatori,
+                "partecipanti_iscritti": row.partecipanti_iscritti,
+                "posti_liberi": posti_liberi,
+                "status": status,
+                "livello": row.livello
+            }
+            posts.append(post)
+            
+        return posts
+        
+    except Exception as e:
+        print(f"[ADMIN] Errore recupero post: {e}")
+        raise HTTPException(status_code=500, detail="Errore recupero post")
+
+@app.get("/admin/comments")
+def get_admin_comments(request: Request, db: Session = Depends(get_db)):
+    """Lista tutti i commenti per admin"""
+    # Verifica privilegi admin
+    verify_admin_user(request)
+    
+    try:
+        # Query per ottenere commenti con informazioni del post
+        comments = db.query(Comment).order_by(Comment.created_at.desc()).all()
+        
+        enriched_comments = []
+        for comment in comments:
+            # Ottieni informazioni del post
+            post = db.query(Post).filter(Post.id == comment.post_id).first()
+            post_titolo = post.titolo if post else f"Post #{comment.post_id}"
+            
+            comment_data = {
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "post_titolo": post_titolo,
+                "autore_email": comment.autore_email,
+                "contenuto": comment.contenuto,
+                "data_creazione": comment.created_at,
+                "contenuto_preview": comment.contenuto[:100] + "..." if len(comment.contenuto) > 100 else comment.contenuto
+            }
+            enriched_comments.append(comment_data)
+            
+        return enriched_comments
+        
+    except Exception as e:
+        print(f"[ADMIN] Errore recupero commenti: {e}")
+        raise HTTPException(status_code=500, detail="Errore recupero commenti")
+
+@app.get("/admin/posts/by-user/{user_email}")
+def get_posts_by_user_admin(user_email: str, request: Request, db: Session = Depends(get_db)):
+    """Ottieni post di un utente specifico (admin)"""
+    # Verifica privilegi admin
+    verify_admin_user(request)
+    
+    try:
+        posts = db.query(Post).filter(Post.autore_email == user_email).order_by(Post.created_at.desc()).all()
+        
+        posts_data = []
+        for post in posts:
+            # Conta partecipanti
+            try:
+                response = requests.get(f"http://auth-service:8080/events/{post.id}/participants", timeout=3)
+                participants_count = response.json().get("count", 0) if response.status_code == 200 else 0
+            except:
+                participants_count = 0
+            
+            post_data = {
+                "id": post.id,
+                "titolo": post.titolo,
+                "sport": post.sport,
+                "citta": post.citta,
+                "provincia": post.provincia,
+                "data_partita": post.data_partita.strftime("%Y-%m-%d"),
+                "ora_partita": post.ora_partita.strftime("%H:%M"),
+                "numero_giocatori": post.numero_giocatori,
+                "partecipanti_iscritti": participants_count,
+                "livello": post.livello,
+                "created_at": post.created_at if hasattr(post, 'created_at') else datetime.utcnow()
+            }
+            posts_data.append(post_data)
+            
+        return posts_data
+        
+    except Exception as e:
+        print(f"[ADMIN] Errore recupero post utente {user_email}: {e}")
+        raise HTTPException(status_code=500, detail="Errore recupero post utente")
+
+@app.get("/admin/posts")
+def get_all_posts_for_admin(request: Request, db: Session = Depends(get_db)):
+    """Ottiene tutti i post per il pannello admin"""
+    try:
+        # Verifica privilegi admin (usa la funzione esistente)
+        admin_email = verify_admin_user(request)
+        
+        # Ottieni tutti i post
+        posts = db.query(Post).order_by(Post.id.desc()).all()
+        
+        admin_posts = []
+        for post in posts:
+            # Conta i partecipanti
+            participants_count = 0
+            try:
+                response = requests.get(f"http://auth-service:8080/events/{post.id}/participants", timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    participants_count = data.get("count", 0)
+            except:
+                participants_count = 0
+            
+            # Calcola disponibilità
+            posti_disponibili = max(0, post.numero_giocatori - participants_count)
+            status = "Completo" if posti_disponibili == 0 else "Aperto"
+            
+            admin_post = {
+                "id": post.id,
+                "titolo": post.titolo,
+                "autore_email": post.autore_email,
+                "sport": post.sport,
+                "citta": post.citta,
+                "provincia": post.provincia,
+                "data_creazione": datetime.utcnow(),  # Placeholder
+                "data_partita": post.data_partita,
+                "ora_partita": post.ora_partita,
+                "numero_giocatori": post.numero_giocatori,
+                "partecipanti_iscritti": participants_count,
+                "posti_liberi": posti_disponibili,
+                "status": status,
+                "livello": getattr(post, 'livello', 'Intermedio'),
+                "commento": post.commento
+            }
+            admin_posts.append(admin_post)
+        
+        print(f"[ADMIN] Restituiti {len(admin_posts)} post per admin")
+        return admin_posts
+        
+    except Exception as e:
+        print(f"[ADMIN] Errore nel recupero post admin: {e}")
+        # Fallback: restituisci lista vuota invece di errore
+        return []
+
+@app.get("/admin/comments")
+def get_all_comments_for_admin(request: Request, db: Session = Depends(get_db)):
+    """Ottiene tutti i commenti per il pannello admin"""
+    try:
+        # Verifica privilegi admin
+        admin_email = verify_admin_user(request)
+        
+        # Ottieni tutti i commenti con il post
+        comments_query = db.query(Comment).join(Post, Comment.post_id == Post.id).order_by(Comment.created_at.desc())
+        comments = comments_query.all()
+        
+        admin_comments = []
+        for comment in comments:
+            admin_comment = {
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "post_titolo": comment.post.titolo if comment.post else f"Post {comment.post_id}",
+                "autore_email": comment.autore_email,
+                "contenuto": comment.contenuto,
+                "data_creazione": comment.created_at,
+                "contenuto_preview": comment.contenuto[:100] + "..." if len(comment.contenuto) > 100 else comment.contenuto
+            }
+            admin_comments.append(admin_comment)
+        
+        print(f"[ADMIN] Restituiti {len(admin_comments)} commenti per admin")
+        return admin_comments
+        
+    except Exception as e:
+        print(f"[ADMIN] Errore nel recupero commenti admin: {e}")
+        # Fallback: restituisci lista vuota
+        return []
+
+@app.get("/admin/dashboard-stats")
+def get_admin_dashboard_stats(request: Request, db: Session = Depends(get_db)):
+    """Statistiche per la dashboard admin"""
+    try:
+        # Verifica privilegi admin
+        admin_email = verify_admin_user(request)
+        
+        # Statistiche base
+        total_posts = db.query(Post).count()
+        total_comments = db.query(Comment).count()
+        total_fields = db.query(SportField).count()
+        
+        # Prova a ottenere gli utenti dal Go service
+        total_users = 0
+        try:
+            user_response = requests.get("http://auth-service:8080/admin/stats", 
+                                       cookies={"session_id": request.cookies.get("session_id")}, 
+                                       timeout=5)
+            if user_response.status_code == 200:
+                user_data = user_response.json()
+                total_users = user_data.get("total_users", 0)
+        except:
+            total_users = 0
+        
+        return {
+            "total_posts": total_posts,
+            "total_comments": total_comments,
+            "total_sport_fields": total_fields,
+            "total_users": total_users,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"[ADMIN] Errore calcolo statistiche: {e}")
+        # Fallback con dati base
+        return {
+            "total_posts": 0,
+            "total_comments": 0,
+            "total_sport_fields": 0,
+            "total_users": 0,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+
+# Assicurati che questo endpoint sia aggiornato
+@app.get("/admin/stats")
+def get_admin_stats(request: Request, db: Session = Depends(get_db)):
+    """Statistiche per amministratori - versione base"""
+    try:
+        # Verifica privilegi admin
+        verify_admin_user(request)
+        
+        total_posts = db.query(Post).count()
+        total_comments = db.query(Comment).count()
+        total_fields = db.query(SportField).count()
+        
+        return {
+            "total_posts": total_posts,
+            "total_comments": total_comments,
+            "total_sport_fields": total_fields,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        print(f"[ADMIN] Errore nel calcolo statistiche base: {e}")
+        return {
+            "total_posts": 0,
+            "total_comments": 0,
+            "total_sport_fields": 0,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+# Migliora l'endpoint statistiche
+@app.get("/admin/stats")
+def get_admin_stats_enhanced(request: Request, db: Session = Depends(get_db)):
+    """Statistiche dettagliate per amministratori"""
+    verify_admin_user(request)
+    
+    try:
+        # Statistiche base
+        total_posts = db.query(Post).count()
+        total_comments = db.query(Comment).count()
+        total_fields = db.query(SportField).count()
+        
+        # Statistiche aggiuntive
+        posts_today = db.query(Post).filter(
+            Post.created_at >= datetime.utcnow().date()
+        ).count() if hasattr(Post, 'created_at') else 0
+        
+        comments_today = db.query(Comment).filter(
+            Comment.created_at >= datetime.utcnow().date()
+        ).count()
+        
+        # Sport più popolari
+        sport_stats = db.execute("""
+            SELECT sport, COUNT(*) as count 
+            FROM posts 
+            GROUP BY sport 
+            ORDER BY count DESC 
+            LIMIT 5
+        """).fetchall()
+        
+        # Province più attive
+        province_stats = db.execute("""
+            SELECT provincia, COUNT(*) as count 
+            FROM posts 
+            GROUP BY provincia 
+            ORDER BY count DESC 
+            LIMIT 5
+        """).fetchall()
+        
+        return {
+            "total_posts": total_posts,
+            "total_comments": total_comments,
+            "total_sport_fields": total_fields,
+            "posts_today": posts_today,
+            "comments_today": comments_today,
+            "popular_sports": [{"sport": row.sport, "count": row.count} for row in sport_stats],
+            "active_provinces": [{"provincia": row.provincia, "count": row.count} for row in province_stats],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"[ADMIN] Errore statistiche: {e}")
+        return {
+            "total_posts": 0,
+            "total_comments": 0,
+            "total_sport_fields": 0,
+            "posts_today": 0,
+            "comments_today": 0,
+            "popular_sports": [],
+            "active_provinces": [],
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
