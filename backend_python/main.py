@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 from typing import List
 from fastapi import FastAPI, HTTPException, Depends
 import requests
@@ -18,9 +18,6 @@ app = FastAPI(title="TrovaGiocatori API", description="API per la gestione di ev
 
 # Creazione delle tabelle nel database
 Base.metadata.create_all(bind=engine)
-
-# CORREZIONE: Monta Socket.IO correttamente
-sio_asgi_app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path="/ws/socket.io")
 
 # Dependency per la sessione del database
 def get_db():
@@ -80,7 +77,7 @@ async def startup_event():
 # CORREZIONE: Aggiunto endpoint per testare Socket.IO
 @app.get("/ws/test")
 async def test_socket_endpoint():
-    """Endpoint di test per verificare che Socket.IO sia configurato"""
+    """Endpoint de test per verificare che Socket.IO sia configurato"""
     return {
         "message": "Socket.IO is running",
         "socketio_path": "/ws/socket.io/",
@@ -366,7 +363,7 @@ def create_comment(post_id: int, comment: CommentCreate, request: Request, db: S
 @app.get("/posts/{post_id}/comments/", response_model=List[CommentResponse])
 def get_post_comments(post_id: int, db: Session = Depends(get_db)):
     """Ottieni tutti i commenti di un post con info utente"""
-    # Verifica che il post esista
+    # Verifica che el post esista
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post non trovato")
@@ -538,7 +535,6 @@ def health_check():
     """Endpoint per verificare lo stato dell'API"""
     return {"status": "healthy", "service": "trovagiocatori-api"}
 
-
 # ========== ENDPOINT AMMINISTRATORE ==========
 
 def verify_admin_user(request: Request):
@@ -622,111 +618,6 @@ def admin_delete_comment(comment_id: int, request: Request, db: Session = Depend
         "deleted_by": admin_email
     }
 
-@app.get("/admin/stats")
-def get_admin_stats(request: Request, db: Session = Depends(get_db)):
-    """Statistiche per amministratori"""
-    # Verifica privilegi admin
-    verify_admin_user(request)
-    
-    total_posts = db.query(Post).count()
-    total_comments = db.query(Comment).count()
-    total_fields = db.query(SportField).count()
-    
-    return {
-        "total_posts": total_posts,
-        "total_comments": total_comments,
-        "total_sport_fields": total_fields,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-# IMPORTANTE: Esporta l'app ASGI corretta per uvicorn
-app = sio_asgi_app
-
-
-@app.get("/admin/posts")
-def get_admin_posts(request: Request, db: Session = Depends(get_db)):
-    """Lista tutti i post per admin con statistiche partecipanti"""
-    # Verifica privilegi admin
-    verify_admin_user(request)
-    
-    query = """
-        SELECT 
-            p.id, p.titolo, p.autore_email, p.sport, p.citta, p.provincia,
-            p.data_partita, p.ora_partita, p.numero_giocatori, p.livello,
-            p.created_at,
-            COUNT(ep.user_id) as partecipanti_iscritti
-        FROM posts p
-        LEFT JOIN event_participants ep ON p.id = ep.post_id AND ep.status = 'confirmed'
-        GROUP BY p.id, p.titolo, p.autore_email, p.sport, p.citta, p.provincia,
-                 p.data_partita, p.ora_partita, p.numero_giocatori, p.livello, p.created_at
-        ORDER BY p.created_at DESC
-    """
-    
-    try:
-        result = db.execute(query)
-        posts = []
-        
-        for row in result:
-            # Determina lo status del post
-            posti_liberi = max(0, row.numero_giocatori - row.partecipanti_iscritti)
-            status = "Completo" if posti_liberi == 0 else "Aperto"
-            
-            post = {
-                "id": row.id,
-                "titolo": row.titolo,
-                "autore_email": row.autore_email,
-                "sport": row.sport,
-                "citta": row.citta,
-                "provincia": row.provincia,
-                "data_creazione": row.created_at,
-                "data_partita": row.data_partita,
-                "numero_giocatori": row.numero_giocatori,
-                "partecipanti_iscritti": row.partecipanti_iscritti,
-                "posti_liberi": posti_liberi,
-                "status": status,
-                "livello": row.livello
-            }
-            posts.append(post)
-            
-        return posts
-        
-    except Exception as e:
-        print(f"[ADMIN] Errore recupero post: {e}")
-        raise HTTPException(status_code=500, detail="Errore recupero post")
-
-@app.get("/admin/comments")
-def get_admin_comments(request: Request, db: Session = Depends(get_db)):
-    """Lista tutti i commenti per admin"""
-    # Verifica privilegi admin
-    verify_admin_user(request)
-    
-    try:
-        # Query per ottenere commenti con informazioni del post
-        comments = db.query(Comment).order_by(Comment.created_at.desc()).all()
-        
-        enriched_comments = []
-        for comment in comments:
-            # Ottieni informazioni del post
-            post = db.query(Post).filter(Post.id == comment.post_id).first()
-            post_titolo = post.titolo if post else f"Post #{comment.post_id}"
-            
-            comment_data = {
-                "id": comment.id,
-                "post_id": comment.post_id,
-                "post_titolo": post_titolo,
-                "autore_email": comment.autore_email,
-                "contenuto": comment.contenuto,
-                "data_creazione": comment.created_at,
-                "contenuto_preview": comment.contenuto[:100] + "..." if len(comment.contenuto) > 100 else comment.contenuto
-            }
-            enriched_comments.append(comment_data)
-            
-        return enriched_comments
-        
-    except Exception as e:
-        print(f"[ADMIN] Errore recupero commenti: {e}")
-        raise HTTPException(status_code=500, detail="Errore recupero commenti")
-
 @app.get("/admin/posts/by-user/{user_email}")
 def get_posts_by_user_admin(user_email: str, request: Request, db: Session = Depends(get_db)):
     """Ottieni post di un utente specifico (admin)"""
@@ -770,8 +661,8 @@ def get_posts_by_user_admin(user_email: str, request: Request, db: Session = Dep
 def get_all_posts_for_admin(request: Request, db: Session = Depends(get_db)):
     """Ottiene tutti i post per il pannello admin"""
     try:
-        # Verifica privilegi admin (usa la funzione esistente)
-        admin_email = verify_admin_user(request)
+        # Verifica privilegi admin
+        verify_admin_user(request)
         
         # Ottieni tutti i post
         posts = db.query(Post).order_by(Post.id.desc()).all()
@@ -799,7 +690,7 @@ def get_all_posts_for_admin(request: Request, db: Session = Depends(get_db)):
                 "sport": post.sport,
                 "citta": post.citta,
                 "provincia": post.provincia,
-                "data_creazione": datetime.utcnow(),  # Placeholder
+                "data_creazione": post.created_at if hasattr(post, 'created_at') else datetime.utcnow(),
                 "data_partita": post.data_partita,
                 "ora_partita": post.ora_partita,
                 "numero_giocatori": post.numero_giocatori,
@@ -824,7 +715,7 @@ def get_all_comments_for_admin(request: Request, db: Session = Depends(get_db)):
     """Ottiene tutti i commenti per il pannello admin"""
     try:
         # Verifica privilegi admin
-        admin_email = verify_admin_user(request)
+        verify_admin_user(request)
         
         # Ottieni tutti i commenti con il post
         comments_query = db.query(Comment).join(Post, Comment.post_id == Post.id).order_by(Comment.created_at.desc())
@@ -856,7 +747,7 @@ def get_admin_dashboard_stats(request: Request, db: Session = Depends(get_db)):
     """Statistiche per la dashboard admin"""
     try:
         # Verifica privilegi admin
-        admin_email = verify_admin_user(request)
+        verify_admin_user(request)
         
         # Statistiche base
         total_posts = db.query(Post).count()
@@ -894,34 +785,6 @@ def get_admin_dashboard_stats(request: Request, db: Session = Depends(get_db)):
             "generated_at": datetime.utcnow().isoformat()
         }
 
-# Assicurati che questo endpoint sia aggiornato
-@app.get("/admin/stats")
-def get_admin_stats(request: Request, db: Session = Depends(get_db)):
-    """Statistiche per amministratori - versione base"""
-    try:
-        # Verifica privilegi admin
-        verify_admin_user(request)
-        
-        total_posts = db.query(Post).count()
-        total_comments = db.query(Comment).count()
-        total_fields = db.query(SportField).count()
-        
-        return {
-            "total_posts": total_posts,
-            "total_comments": total_comments,
-            "total_sport_fields": total_fields,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    except Exception as e:
-        print(f"[ADMIN] Errore nel calcolo statistiche base: {e}")
-        return {
-            "total_posts": 0,
-            "total_comments": 0,
-            "total_sport_fields": 0,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-
-# Migliora l'endpoint statistiche
 @app.get("/admin/stats")
 def get_admin_stats_enhanced(request: Request, db: Session = Depends(get_db)):
     """Statistiche dettagliate per amministratori"""
@@ -960,14 +823,33 @@ def get_admin_stats_enhanced(request: Request, db: Session = Depends(get_db)):
             LIMIT 5
         """).fetchall()
         
+        # Prova a ottenere statistiche utenti dal servizio auth
+        user_stats = {}
+        try:
+            user_response = requests.get(
+                "http://auth-service:8080/admin/stats",
+                cookies={"session_id": request.cookies.get("session_id")},
+                timeout=5
+            )
+            if user_response.status_code == 200:
+                user_stats = user_response.json()
+        except Exception as e:
+            print(f"[ADMIN] Errore recupero statistiche utenti: {e}")
+            user_stats = {
+                "total_users": 0,
+                "users_today": 0,
+                "active_users": 0
+            }
+        
         return {
             "total_posts": total_posts,
             "total_comments": total_comments,
             "total_sport_fields": total_fields,
             "posts_today": posts_today,
             "comments_today": comments_today,
-            "popular_sports": [{"sport": row.sport, "count": row.count} for row in sport_stats],
-            "active_provinces": [{"provincia": row.provincia, "count": row.count} for row in province_stats],
+            "popular_sports": [{"sport": row[0], "count": row[1]} for row in sport_stats],
+            "active_provinces": [{"provincia": row[0], "count": row[1]} for row in province_stats],
+            "user_stats": user_stats,
             "timestamp": datetime.utcnow().isoformat()
         }
         
@@ -981,6 +863,19 @@ def get_admin_stats_enhanced(request: Request, db: Session = Depends(get_db)):
             "comments_today": 0,
             "popular_sports": [],
             "active_provinces": [],
+            "user_stats": {
+                "total_users": 0,
+                "users_today": 0,
+                "active_users": 0
+            },
             "timestamp": datetime.utcnow().isoformat(),
             "error": str(e)
         }
+
+
+
+# Monta Socket.IO correttamente ALLA FINE, dopo tutti gli endpoint
+sio_asgi_app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path="/ws/socket.io")
+
+#  Esporta l'app ASGI corretta per uvicorn
+app = sio_asgi_app
