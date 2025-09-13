@@ -272,22 +272,21 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 		} else {
-			// L'utente NON è bannato -> BAN
-			fmt.Printf("[ADMIN] Applicazione ban per utente %d da admin %d\n", targetUserID, adminID)
+			// L'utente NON è bannato -> BAN PERMANENTE
+			fmt.Printf("[ADMIN] Applicazione ban permanente per utente %d da admin %d\n", targetUserID, adminID)
 
-			// Crea una richiesta di ban standard
+			// CORREZIONE: Crea una richiesta di ban permanente senza BanType
 			banReq := &db.BanUserRequest{
-				UserID:  targetUserID,
-				Reason:  "Ban amministrativo tramite pannello admin",
-				BanType: "temporary", // Ban temporaneo di default
-				Notes:   "Banned via admin toggle",
+				UserID: targetUserID,
+				Reason: "Ban amministrativo permanente tramite pannello admin",
+				Notes:  "Banned permanently via admin toggle",
 			}
 
 			// Ottieni IP e User-Agent per audit
 			ipAddress := getClientIP(r)
 			userAgent := r.UserAgent()
 
-			// Applica il ban
+			// Applica il ban permanente
 			ban, err := database.BanUser(banReq, adminID, ipAddress, userAgent)
 			if err != nil {
 				fmt.Printf("[ADMIN] Errore applicazione ban utente %d: %v\n", targetUserID, err)
@@ -295,21 +294,24 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 				return
 			}
 
-			fmt.Printf("[ADMIN] ✅ Utente %d bannato con successo\n", targetUserID)
+			fmt.Printf("[ADMIN] ✅ Utente %d bannato permanentemente\n", targetUserID)
 
 			response := map[string]interface{}{
 				"success":    true,
-				"message":    "Utente bannato con successo",
+				"message":    "Utente bannato permanentemente",
 				"user_id":    targetUserID,
 				"is_banned":  true,
 				"new_status": false, // L'utente è ora inattivo
 				"ban_info":   ban,
-				"action":     "banned",
+				"action":     "banned_permanent",
 			}
 
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 		}
+
+		// Aggiorna le statistiche
+		// await LoadDashboardStats(); // Questo è per il client, qui non serve
 	})
 }
 

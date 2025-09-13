@@ -1,4 +1,4 @@
-// auth-service/internal/handlers/login.go (AGGIORNATO con controllo ban)
+// auth-service/internal/handlers/login.go (CORRETTO)
 package handlers
 
 import (
@@ -25,13 +25,10 @@ type LoginResponse struct {
 	BanInfo *BanInfo `json:"ban_info,omitempty"`
 }
 
-// BanInfo contiene informazioni sul ban per la risposta
+// BanInfo contiene informazioni sul ban per la risposta (SEMPLIFICATO)
 type BanInfo struct {
-	Reason      string     `json:"reason"`
-	BannedAt    time.Time  `json:"banned_at"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	BanType     string     `json:"ban_type"`
-	IsPermanent bool       `json:"is_permanent"`
+	Reason   string    `json:"reason"`
+	BannedAt time.Time `json:"banned_at"`
 }
 
 // LoginHandler gestisce il login degli utenti CON CONTROLLO BAN
@@ -56,7 +53,7 @@ func LoginHandler(database *db.Database, sm *sessions.SessionManager) http.Handl
 
 		fmt.Printf("[LOGIN] Credenziali valide per userID: %d\n", userID)
 
-		// NUOVO: Controlla se l'utente è bannato PRIMA di creare la sessione
+		// CONTROLLO BAN: Controlla se l'utente è bannato PRIMA di creare la sessione
 		isBanned, banInfo, err := database.IsUserBanned(userID)
 		if err != nil {
 			fmt.Printf("[LOGIN] Errore controllo ban per userID %d: %v\n", userID, err)
@@ -67,24 +64,14 @@ func LoginHandler(database *db.Database, sm *sessions.SessionManager) http.Handl
 		if isBanned && banInfo != nil {
 			fmt.Printf("[LOGIN] ❌ Accesso negato - Utente %d è bannato: %s\n", userID, banInfo.Reason)
 
-			// Crea la risposta con informazioni sul ban
+			// Crea la risposta con informazioni sul ban (SEMPLIFICATO)
 			banResponse := &BanInfo{
-				Reason:      banInfo.Reason,
-				BannedAt:    banInfo.BannedAt,
-				ExpiresAt:   banInfo.ExpiresAt,
-				BanType:     banInfo.BanType,
-				IsPermanent: banInfo.BanType == "permanent",
+				Reason:   banInfo.Reason,
+				BannedAt: banInfo.BannedAt,
 			}
 
-			// Determina il messaggio in base al tipo di ban
-			var message string
-			if banInfo.BanType == "permanent" {
-				message = "Il tuo account è stato bannato permanentemente."
-			} else if banInfo.ExpiresAt != nil {
-				message = fmt.Sprintf("Il tuo account è stato bannato fino al %s.", banInfo.ExpiresAt.Format("02/01/2006 15:04"))
-			} else {
-				message = "Il tuo account è stato bannato temporaneamente."
-			}
+			// Messaggio per ban permanente semplificato
+			message := "Il tuo account è stato bannato permanentemente."
 
 			// Se c'è un motivo specificato, aggiungilo
 			if banInfo.Reason != "" && banInfo.Reason != "Ban amministrativo" {
@@ -103,7 +90,7 @@ func LoginHandler(database *db.Database, sm *sessions.SessionManager) http.Handl
 			return
 		}
 
-		// NUOVO: Controlla anche se l'utente è attivo (doppio controllo di sicurezza)
+		// CONTROLLO ATTIVO: Controlla anche se l'utente è attivo (doppio controllo di sicurezza)
 		isActive, err := database.IsUserActive(userID)
 		if err != nil {
 			fmt.Printf("[LOGIN] Errore controllo stato attivo per userID %d: %v\n", userID, err)

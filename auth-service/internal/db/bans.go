@@ -17,8 +17,6 @@ type UserBan struct {
 	UnbannedAt      *time.Time `json:"unbanned_at,omitempty"`
 	UnbannedByID    *int64     `json:"unbanned_by_admin_id,omitempty"`
 	IsActive        bool       `json:"is_active"`
-	BanType         string     `json:"ban_type"`
-	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	Notes           string     `json:"notes"`
 
 	// Informazioni aggiuntive per la visualizzazione
@@ -44,18 +42,16 @@ type BanHistory struct {
 
 // BanUserRequest rappresenta una richiesta di ban
 type BanUserRequest struct {
-	UserID    int64      `json:"user_id"`
-	Reason    string     `json:"reason"`
-	BanType   string     `json:"ban_type"` // 'temporary', 'permanent'
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	Notes     string     `json:"notes"`
+	UserID int64  `json:"user_id"`
+	Reason string `json:"reason"`
+	Notes  string `json:"notes"`
 }
 
 // CreateBanTablesIfNotExists crea le tabelle per i ban se non esistono
 func (db *Database) CreateBanTablesIfNotExists() error {
 	fmt.Println("🔧 Inizializzazione sistema ban...")
 
-	// 1. Crea tabella user_bans
+	// 1. Crea tabella user_bans SEMPLIFICATA
 	_, err := db.Conn.Exec(`
 		CREATE TABLE IF NOT EXISTS user_bans (
 			id SERIAL PRIMARY KEY,
@@ -66,8 +62,6 @@ func (db *Database) CreateBanTablesIfNotExists() error {
 			unbanned_at TIMESTAMP NULL,
 			unbanned_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
 			is_active BOOLEAN DEFAULT TRUE,
-			ban_type VARCHAR(50) DEFAULT 'temporary',
-			expires_at TIMESTAMP NULL,
 			notes TEXT
 		)`)
 	if err != nil {
@@ -125,13 +119,13 @@ func (db *Database) BanUser(ban *BanUserRequest, adminID int64, ipAddress, userA
 		return nil, fmt.Errorf("utente già bannato")
 	}
 
-	// Inserisci il nuovo ban
+	// Inserisci il nuovo ban (SEMPLIFICATO)
 	var banID int64
 	err = tx.QueryRow(`
-		INSERT INTO user_bans (user_id, banned_by_admin_id, reason, ban_type, expires_at, notes)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO user_bans (user_id, banned_by_admin_id, reason, notes)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id`,
-		ban.UserID, adminID, ban.Reason, ban.BanType, ban.ExpiresAt, ban.Notes,
+		ban.UserID, adminID, ban.Reason, ban.Notes,
 	).Scan(&banID)
 
 	if err != nil {
@@ -227,16 +221,7 @@ func (db *Database) IsUserBanned(userID int64) (bool, *UserBan, error) {
 		return false, nil, err
 	}
 
-	// Controlla se il ban è scaduto
-	if ban.ExpiresAt != nil && ban.ExpiresAt.Before(time.Now()) {
-		// Ban scaduto, rimuovilo automaticamente
-		err = db.UnbanUser(userID, 0, "Ban scaduto automaticamente")
-		if err != nil {
-			fmt.Printf("Errore nella rimozione automatica del ban scaduto: %v\n", err)
-		}
-		return false, nil, nil
-	}
-
+	// Per i ban permanenti, è sempre attivo
 	return true, ban, nil
 }
 
@@ -245,8 +230,7 @@ func (db *Database) GetActiveBanByUserID(userID int64) (*UserBan, error) {
 	query := `
 		SELECT 
 			ub.id, ub.user_id, ub.banned_by_admin_id, ub.reason, ub.banned_at,
-			ub.unbanned_at, ub.unbanned_by_admin_id, ub.is_active, ub.ban_type,
-			ub.expires_at, ub.notes,
+			ub.unbanned_at, ub.unbanned_by_admin_id, ub.is_active, ub.notes,
 			u.username, u.email,
 			admin.username as admin_username
 		FROM user_bans ub
@@ -259,8 +243,7 @@ func (db *Database) GetActiveBanByUserID(userID int64) (*UserBan, error) {
 	ban := &UserBan{}
 	err := db.Conn.QueryRow(query, userID).Scan(
 		&ban.ID, &ban.UserID, &ban.BannedByAdminID, &ban.Reason, &ban.BannedAt,
-		&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.BanType,
-		&ban.ExpiresAt, &ban.Notes,
+		&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.Notes,
 		&ban.Username, &ban.Email, &ban.AdminUsername,
 	)
 
@@ -276,8 +259,7 @@ func (db *Database) GetBanByID(banID int64) (*UserBan, error) {
 	query := `
 		SELECT 
 			ub.id, ub.user_id, ub.banned_by_admin_id, ub.reason, ub.banned_at,
-			ub.unbanned_at, ub.unbanned_by_admin_id, ub.is_active, ub.ban_type,
-			ub.expires_at, ub.notes,
+			ub.unbanned_at, ub.unbanned_by_admin_id, ub.is_active, ub.notes,
 			u.username, u.email,
 			admin.username as admin_username
 		FROM user_bans ub
@@ -288,8 +270,7 @@ func (db *Database) GetBanByID(banID int64) (*UserBan, error) {
 	ban := &UserBan{}
 	err := db.Conn.QueryRow(query, banID).Scan(
 		&ban.ID, &ban.UserID, &ban.BannedByAdminID, &ban.Reason, &ban.BannedAt,
-		&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.BanType,
-		&ban.ExpiresAt, &ban.Notes,
+		&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.Notes,
 		&ban.Username, &ban.Email, &ban.AdminUsername,
 	)
 
@@ -305,8 +286,7 @@ func (db *Database) GetAllActiveBans() ([]UserBan, error) {
 	query := `
 		SELECT 
 			ub.id, ub.user_id, ub.banned_by_admin_id, ub.reason, ub.banned_at,
-			ub.unbanned_at, ub.unbanned_by_admin_id, ub.is_active, ub.ban_type,
-			ub.expires_at, ub.notes,
+			ub.unbanned_at, ub.unbanned_by_admin_id, ub.is_active, ub.notes,
 			u.username, u.email,
 			admin.username as admin_username
 		FROM user_bans ub
@@ -326,8 +306,7 @@ func (db *Database) GetAllActiveBans() ([]UserBan, error) {
 		var ban UserBan
 		err := rows.Scan(
 			&ban.ID, &ban.UserID, &ban.BannedByAdminID, &ban.Reason, &ban.BannedAt,
-			&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.BanType,
-			&ban.ExpiresAt, &ban.Notes,
+			&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.Notes,
 			&ban.Username, &ban.Email, &ban.AdminUsername,
 		)
 		if err != nil {
@@ -404,25 +383,15 @@ func (db *Database) GetBanStats() (map[string]interface{}, error) {
 	}
 	stats["total_bans"] = totalBans
 
-	// Conta ban scaduti oggi
-	var expiredToday int
+	// Conta ban rimossi oggi
+	var unbannedToday int
 	err = db.Conn.QueryRow(`
 		SELECT COUNT(*) FROM user_bans 
-		WHERE expires_at::date = CURRENT_DATE AND is_active = FALSE`).Scan(&expiredToday)
+		WHERE unbanned_at::date = CURRENT_DATE AND is_active = FALSE`).Scan(&unbannedToday)
 	if err != nil {
-		expiredToday = 0
+		unbannedToday = 0
 	}
-	stats["expired_today"] = expiredToday
-
-	// Conta ban permanenti attivi
-	var permanentBans int
-	err = db.Conn.QueryRow(`
-		SELECT COUNT(*) FROM user_bans 
-		WHERE ban_type = 'permanent' AND is_active = TRUE`).Scan(&permanentBans)
-	if err != nil {
-		permanentBans = 0
-	}
-	stats["permanent_bans"] = permanentBans
+	stats["unbanned_today"] = unbannedToday
 
 	return stats, nil
 }

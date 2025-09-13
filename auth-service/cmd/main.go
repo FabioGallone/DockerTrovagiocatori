@@ -49,13 +49,6 @@ func main() {
 		log.Fatalf("Error creating ban tables: %v", err)
 	}
 
-	// NUOVO: Pulisce ban scaduti all'avvio
-	if err := database.CleanupExpiredBans(); err != nil {
-		log.Printf("Warning: Error cleaning expired bans: %v", err)
-	} else {
-		log.Println("✔ Ban scaduti puliti all'avvio")
-	}
-
 	// NUOVO: Aggiorna tabella users con campi admin
 	if err := database.CreateUsersTableWithAdminFields(); err != nil {
 		log.Fatalf("Error updating users table with admin fields: %v", err)

@@ -60,10 +60,6 @@ func BanUserHandler(database *db.Database, sm *sessions.SessionManager) http.Han
 			banReq.Reason = "Ban amministrativo"
 		}
 
-		if banReq.BanType == "" {
-			banReq.BanType = "temporary"
-		}
-
 		// Ottieni IP per audit
 		ipAddress := getClientIP(r)
 		userAgent := r.UserAgent()
