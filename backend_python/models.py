@@ -63,7 +63,7 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
-    chat_type = Column(String, default="post")  # "post" o "friend"
+    chat_type = Column(String, default="friend")  # "post" o "friend"
     
     # Relazione con il post (opzionale)
     post = relationship("Post")

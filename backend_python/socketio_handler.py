@@ -52,30 +52,13 @@ async def get_user_info_from_auth_service(session_cookie: str) -> Dict:
         return None
 
 
-def create_private_room_name(email1: str, email2: str, post_id: int) -> str:
-    """Crea un nome univoco per la room privata tra due utenti"""
-    # Ordina le email per garantire sempre lo stesso nome room indipendentemente dall'ordine
-    sorted_emails = sorted([email1, email2])
-    
-    # Gestisce sia chat legate a post che chat generiche
-    if post_id == -1:
-        # Chat generica tra amici
-        return f"friend_chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
-    else:
-        # Chat legata a un post
-        return f"post_{post_id}_chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
 
 
-def save_message_to_database(post_id: int, sender_email: str, recipient_email: str, content: str) -> int:
+def save_message_to_database(sender_email: str, recipient_email: str, content: str, chat_type: str = "friend") -> int:
     """Salva il messaggio nel database e restituisce l'ID"""
     db = SessionLocal()
     try:
-        # Determina il tipo di chat e gestisce post_id
-        chat_type = "friend" if post_id == -1 else "post"
-        actual_post_id = None if post_id == -1 else post_id
-        
         chat_message = ChatMessage(
-            post_id=actual_post_id,  # NULL se chat tra amici
             sender_email=sender_email,
             recipient_email=recipient_email,
             content=content,
@@ -95,12 +78,11 @@ def save_message_to_database(post_id: int, sender_email: str, recipient_email: s
         db.close()
 
 
-def get_chat_history(post_id: int, user_email1: str, user_email2: str, limit: int = 50) -> List[Dict]:
-    """Recupera la cronologia chat tra due utenti per un post"""
+def get_chat_history(user_email1: str, user_email2: str, limit: int = 50) -> List[Dict]:
+    """Recupera la cronologia chat tra due utenti"""
     db = SessionLocal()
     try:
         messages = db.query(ChatMessage).filter(
-            ChatMessage.post_id == post_id,
             ((ChatMessage.sender_email == user_email1) & (ChatMessage.recipient_email == user_email2)) |
             ((ChatMessage.sender_email == user_email2) & (ChatMessage.recipient_email == user_email1))
         ).order_by(ChatMessage.created_at.asc()).limit(limit).all()
@@ -109,7 +91,6 @@ def get_chat_history(post_id: int, user_email1: str, user_email2: str, limit: in
         for msg in messages:
             result.append({
                 'id': str(msg.id),
-                'post_id': msg.post_id,
                 'sender_email': msg.sender_email,
                 'recipient_email': msg.recipient_email,
                 'content': msg.content,
@@ -117,7 +98,7 @@ def get_chat_history(post_id: int, user_email1: str, user_email2: str, limit: in
                 'read': msg.is_read
             })
         
-        logger.info(f"[CHAT DB] Recuperati {len(result)} messaggi per post {post_id}")
+        logger.info(f"[CHAT DB] Recuperati {len(result)} messaggi tra {user_email1} e {user_email2}")
         return result
     except Exception as e:
         logger.error(f"[CHAT DB] Errore recupero cronologia: {e}")
@@ -223,12 +204,11 @@ async def disconnect(sid):
 
 
 @sio.event
-async def join_post_chat(sid, data):
+async def join_chat(sid, data):
     """
-    Un utente vuole iniziare/partecipare alla chat di un post
+    Un utente vuole iniziare/partecipare a una chat
     data = {
-        'post_id': int,
-        'post_author_email': str  # Email dell'autore del post
+        'other_user_email': str  # Email dell'altro utente
     }
     """
     try:
@@ -238,61 +218,38 @@ async def join_post_chat(sid, data):
             return
         
         user_email = session['user_email']
-        post_id = data['post_id']
-        post_author_email = data['post_author_email']
+        other_user_email = data['other_user_email']
         
-        logger.info(f"[SOCKET] Utente {user_email} vuole entrare nella chat del post {post_id}")
+        logger.info(f"[SOCKET] Utente {user_email} vuole entrare nella chat con {other_user_email}")
         
-        # Crea il nome della room privata
-        room_name = create_private_room_name(user_email, post_author_email, post_id)
+        # Crea il nome della room privata (solo basato sulle email)
+        # Usa un ordinamento per garantire che la room sia la stessa per entrambi gli utenti
+        sorted_emails = sorted([user_email, other_user_email])
+        room_name = f"chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
         
         # Aggiungi il socket alla room
         await sio.enter_room(sid, room_name)
         
-        # Aggiorna il tracking delle chat attive
-        if post_id not in active_chats:
-            active_chats[post_id] = {
-                'participants': list(set([user_email, post_author_email])),  # Evita duplicati
-                'room_name': room_name,
-                'created_at': datetime.utcnow().isoformat()
-            }
-        else:
-            # Aggiungi il partecipante se non è già presente
-            if user_email not in active_chats[post_id]['participants']:
-                active_chats[post_id]['participants'].append(user_email)
-        
-        # NUOVO: Invia la cronologia messaggi esistenti
-        other_user = post_author_email if user_email != post_author_email else user_email
-        chat_history = get_chat_history(post_id, user_email, other_user)
+        # Invia la cronologia messaggi esistenti
+        chat_history = get_chat_history(user_email, other_user_email)
         
         if chat_history:
             await sio.emit('chat_history', {
-                'post_id': post_id,
                 'messages': chat_history
             }, room=sid)
-        
-        # Notifica che l'utente è entrato nella chat
-        await sio.emit('chat_joined', {
-            'post_id': post_id,
-            'room_name': room_name,
-            'participants': active_chats[post_id]['participants'],
-            'user_email': user_email,
-            'message': f'{user_email} è entrato nella chat'
-        }, room=room_name)
         
         logger.info(f"[SOCKET] ✅ Utente {user_email} entrato nella room {room_name}")
         
     except Exception as e:
-        logger.error(f"[SOCKET] Errore join_post_chat per {sid}: {e}")
+        logger.error(f"[SOCKET] Errore join_chat per {sid}: {e}")
         await sio.emit('error', {'message': f'Errore nell\'entrare in chat: {str(e)}'}, room=sid)
 
 
 @sio.event
 async def send_private_message(sid, data):
     """
-    Invia un messaggio privato nella chat del post
+    Invia un messaggio privato
     data = {
-        'post_id': int,
         'recipient_email': str,
         'message': str
     }
@@ -304,7 +261,6 @@ async def send_private_message(sid, data):
             return
         
         user_email = session['user_email']
-        post_id = data['post_id']
         recipient_email = data['recipient_email']
         message_content = data['message'].strip()
         
@@ -312,21 +268,21 @@ async def send_private_message(sid, data):
             await sio.emit('error', {'message': 'Messaggio vuoto'}, room=sid)
             return
         
-        logger.info(f"[SOCKET] Messaggio da {user_email} a {recipient_email} per post {post_id}: {message_content[:50]}...")
+        logger.info(f"[SOCKET] Messaggio da {user_email} a {recipient_email}: {message_content[:50]}...")
         
-        # NUOVO: Salva il messaggio nel database
-        message_id = save_message_to_database(post_id, user_email, recipient_email, message_content)
+        # Salva il messaggio nel database (post_id sarà NULL per chat dirette)
+        message_id = save_message_to_database(None, user_email, recipient_email, message_content, "friend")
         if not message_id:
             await sio.emit('error', {'message': 'Errore nel salvataggio del messaggio'}, room=sid)
             return
         
-        # Crea il nome della room
-        room_name = create_private_room_name(user_email, recipient_email, post_id)
+        # Crea il nome della room (stesso nome usato in join_chat)
+        sorted_emails = sorted([user_email, recipient_email])
+        room_name = f"chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
         
-        # Crea il messaggio
+        # Crea il messaggio completo
         message = {
-            'id': str(message_id),  # Usa l'ID dal database
-            'post_id': post_id,
+            'id': str(message_id),
             'sender_email': user_email,
             'recipient_email': recipient_email,
             'content': message_content,
@@ -334,22 +290,12 @@ async def send_private_message(sid, data):
             'read': False
         }
         
-        # FIX: Invia il messaggio SOLO al destinatario, NON al mittente
-        recipient_room = f"user_{recipient_email.replace('@', '_').replace('.', '_')}"
-        await sio.emit('new_private_message', message, room=recipient_room)
+        # Invia il messaggio a TUTTA la room (sia mittente che destinatario)
+        await sio.emit('new_private_message', message, room=room_name)
         
-        # Se il destinatario è online, invia anche una notifica diretta
-        if recipient_email in connected_users and connected_users[recipient_email]['online']:
-            await sio.emit('message_notification', {
-                'from': user_email,
-                'post_id': post_id,
-                'preview': message_content[:50] + ('...' if len(message_content) > 50 else ''),
-                'timestamp': message['timestamp']
-            }, room=recipient_room)
+        logger.info(f"[SOCKET] ✅ Messaggio inviato da {user_email} a room {room_name}")
         
-        logger.info(f"[SOCKET] ✅ Messaggio inviato da {user_email} a {recipient_email}")
-        
-        # Conferma di invio al mittente (senza il contenuto del messaggio per evitare duplicati)
+        # Conferma di invio al mittente
         await sio.emit('message_sent', {
             'message_id': message['id'],
             'status': 'sent',
@@ -370,23 +316,22 @@ async def typing_start(sid, data):
             return
         
         user_email = session['user_email']
-        post_id = data['post_id']
         recipient_email = data['recipient_email']
         
-        room_name = create_private_room_name(user_email, recipient_email, post_id)
+        # Crea il nome della room
+        sorted_emails = sorted([user_email, recipient_email])
+        room_name = f"chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
         
         # Invia notifica di typing (escludendo il mittente)
         await sio.emit('user_typing', {
             'user_email': user_email,
-            'post_id': post_id,
             'typing': True
         }, room=room_name, skip_sid=sid)
         
-        logger.debug(f"[SOCKET] {user_email} ha iniziato a scrivere in post {post_id}")
+        logger.debug(f"[SOCKET] {user_email} ha iniziato a scrivere a {recipient_email}")
         
     except Exception as e:
         logger.error(f"[SOCKET] Errore typing_start per {sid}: {e}")
-
 
 @sio.event
 async def typing_stop(sid, data):
@@ -397,23 +342,22 @@ async def typing_stop(sid, data):
             return
         
         user_email = session['user_email']
-        post_id = data['post_id']
         recipient_email = data['recipient_email']
         
-        room_name = create_private_room_name(user_email, recipient_email, post_id)
+        # Crea il nome della room
+        sorted_emails = sorted([user_email, recipient_email])
+        room_name = f"chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
         
         # Invia notifica di stop typing (escludendo il mittente)
         await sio.emit('user_typing', {
             'user_email': user_email,
-            'post_id': post_id,
             'typing': False
         }, room=room_name, skip_sid=sid)
         
-        logger.debug(f"[SOCKET] {user_email} ha smesso di scrivere in post {post_id}")
+        logger.debug(f"[SOCKET] {user_email} ha smesso di scrivere a {recipient_email}")
         
     except Exception as e:
         logger.error(f"[SOCKET] Errore typing_stop per {sid}: {e}")
-
 
 @sio.event
 async def get_online_users(sid):
@@ -440,19 +384,22 @@ async def get_online_users(sid):
         logger.error(f"[SOCKET] Errore get_online_users per {sid}: {e}")
 
 
+
+
 @sio.event
-async def leave_post_chat(sid, data):
-    """L'utente esce dalla chat del post"""
+async def leave_chat(sid, data):
+    """L'utente esce dalla chat"""
     try:
         session = await sio.get_session(sid)
         if not session:
             return
         
         user_email = session['user_email']
-        post_id = data['post_id']
-        recipient_email = data['recipient_email']
+        other_user_email = data['other_user_email']
         
-        room_name = create_private_room_name(user_email, recipient_email, post_id)
+        # Crea il nome della room
+        sorted_emails = sorted([user_email, other_user_email])
+        room_name = f"chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
         
         # Esci dalla room
         await sio.leave_room(sid, room_name)
@@ -460,17 +407,15 @@ async def leave_post_chat(sid, data):
         # Notifica l'uscita
         await sio.emit('user_left_chat', {
             'user_email': user_email,
-            'post_id': post_id,
             'timestamp': datetime.utcnow().isoformat(),
             'message': f'{user_email} ha lasciato la chat'
         }, room=room_name)
         
-        logger.info(f"[SOCKET] Utente {user_email} è uscito dalla chat del post {post_id}")
+        logger.info(f"[SOCKET] Utente {user_email} è uscito dalla chat con {other_user_email}")
         
     except Exception as e:
-        logger.error(f"[SOCKET] Errore leave_post_chat per {sid}: {e}")
-
-
+        logger.error(f"[SOCKET] Errore leave_chat per {sid}: {e}")
+        
 @sio.event
 async def ping(sid):
     """Risponde al ping del client per mantenere la connessione attiva"""
