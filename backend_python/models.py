@@ -31,10 +31,12 @@ class Post(Base):
     autore_email = Column(String, nullable=False)
     # Campo da calcio selezionato (ora rinominato più genericamente)
     campo_id = Column(Integer, ForeignKey("sport_fields.id"), nullable=True)
-    # NUOVO CAMPO LIVELLO
+    # CAMPO LIVELLO
     livello = Column(String, nullable=False, default='Intermedio')  # 'Principiante', 'Intermedio', 'Avanzato'
-    # NUOVO CAMPO NUMERO GIOCATORI
+    # CAMPO NUMERO GIOCATORI
     numero_giocatori = Column(Integer, nullable=False, default=1)  # Numero di giocatori necessari
+    #  Timestamp di creazione
+    created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relazioni
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
@@ -52,12 +54,11 @@ class Comment(Base):
     # Relazione con il post
     post = relationship("Post", back_populates="comments")
 
-# NUOVO: Modello per i messaggi chat privati
+# Modello per i messaggi chat privati 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    post_id = Column(Integer, ForeignKey("posts.id"), nullable=True)  # NULLABLE per chat generiche
     sender_email = Column(String, nullable=False)
     recipient_email = Column(String, nullable=False)
     content = Column(Text, nullable=False)
@@ -65,5 +66,3 @@ class ChatMessage(Base):
     is_read = Column(Boolean, default=False)
     chat_type = Column(String, default="friend")  # "post" o "friend"
     
-    # Relazione con il post (opzionale)
-    post = relationship("Post")

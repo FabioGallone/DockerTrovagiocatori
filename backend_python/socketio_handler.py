@@ -21,16 +21,16 @@ sio = socketio.AsyncServer(
     cors_allowed_origins="*",
     logger=True,
     engineio_logger=True,  # Abilita temporaneamente per debug
-    path="/ws/socket.io"  # AGGIUNGI QUESTA LINEA
+    path="/ws/socket.io"
 )
 
 # Dizionario per tenere traccia degli utenti connessi
 # Struttura: {user_email: {sid: socket_id, username: username, online: bool}}
 connected_users: Dict[str, Dict] = {}
 
-# Dizionario per tenere traccia delle chat attive per ogni post
-# Struttura: {post_id: {participants: [email1, email2], room_name: string}}
-active_chats: Dict[int, Dict] = {}
+# Dizionario per tenere traccia delle chat attive
+# Struttura: {chat_key: {participants: [email1, email2], room_name: string}}
+active_chats: Dict[str, Dict] = {}
 
 
 async def get_user_info_from_auth_service(session_cookie: str) -> Dict:
@@ -50,8 +50,6 @@ async def get_user_info_from_auth_service(session_cookie: str) -> Dict:
     except Exception as e:
         logger.error(f"Errore nel recupero info utente: {e}")
         return None
-
-
 
 
 def save_message_to_database(sender_email: str, recipient_email: str, content: str, chat_type: str = "friend") -> int:
@@ -112,8 +110,6 @@ async def connect(sid, environ, auth):
     """Gestisce la connessione di un nuovo utente"""
     try:
         logger.info(f"[SOCKET] Tentativo di connessione per sid: {sid}")
-        logger.info(f"[SOCKET] Environ: {environ.get('PATH_INFO')}")
-        logger.info(f"[SOCKET] Auth: {auth}")
         
         # Verifica autenticazione
         session_cookie = None
@@ -151,7 +147,8 @@ async def connect(sid, environ, auth):
         }
         
         # Il socket si unisce automaticamente a una room con il proprio user_email
-        await sio.enter_room(sid, f"user_{user_email.replace('@', '_').replace('.', '_')}")
+        user_room = f"user_{user_email.replace('@', '_').replace('.', '_')}"
+        await sio.enter_room(sid, user_room)
         
         logger.info(f"[SOCKET] ✅ Utente {user_email} connesso con sid {sid}")
         
@@ -196,9 +193,6 @@ async def disconnect(sid):
                 
                 logger.info(f"[SOCKET] Utente {user_email} disconnesso")
                 
-                # Cleanup: rimuovi dopo un po' di tempo
-                # Per ora lo lasciamo per tracking
-                
     except Exception as e:
         logger.error(f"[SOCKET] Errore durante disconnessione {sid}: {e}")
 
@@ -206,7 +200,7 @@ async def disconnect(sid):
 @sio.event
 async def join_chat(sid, data):
     """
-    Un utente vuole iniziare/partecipare a una chat
+    Un utente vuole iniziare/partecipare a una chat con un altro utente
     data = {
         'other_user_email': str  # Email dell'altro utente
     }
@@ -222,8 +216,7 @@ async def join_chat(sid, data):
         
         logger.info(f"[SOCKET] Utente {user_email} vuole entrare nella chat con {other_user_email}")
         
-        # Crea il nome della room privata (solo basato sulle email)
-        # Usa un ordinamento per garantire che la room sia la stessa per entrambi gli utenti
+        # Crea il nome della room privata (basato sulle email ordinate)
         sorted_emails = sorted([user_email, other_user_email])
         room_name = f"chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
         
@@ -270,8 +263,8 @@ async def send_private_message(sid, data):
         
         logger.info(f"[SOCKET] Messaggio da {user_email} a {recipient_email}: {message_content[:50]}...")
         
-        # Salva il messaggio nel database (post_id sarà NULL per chat dirette)
-        message_id = save_message_to_database(None, user_email, recipient_email, message_content, "friend")
+        # Salva il messaggio nel database
+        message_id = save_message_to_database(user_email, recipient_email, message_content, "friend")
         if not message_id:
             await sio.emit('error', {'message': 'Errore nel salvataggio del messaggio'}, room=sid)
             return
@@ -293,7 +286,7 @@ async def send_private_message(sid, data):
         # Invia il messaggio a TUTTA la room (sia mittente che destinatario)
         await sio.emit('new_private_message', message, room=room_name)
         
-        logger.info(f"[SOCKET] ✅ Messaggio inviato da {user_email} a room {room_name}")
+        logger.info(f"[SOCKET] ✅ Messaggio inviato a TUTTA la room {room_name} (mittente + destinatario)")
         
         # Conferma di invio al mittente
         await sio.emit('message_sent', {
@@ -333,6 +326,7 @@ async def typing_start(sid, data):
     except Exception as e:
         logger.error(f"[SOCKET] Errore typing_start per {sid}: {e}")
 
+
 @sio.event
 async def typing_stop(sid, data):
     """Notifica che l'utente ha smesso di scrivere"""
@@ -358,32 +352,6 @@ async def typing_stop(sid, data):
         
     except Exception as e:
         logger.error(f"[SOCKET] Errore typing_stop per {sid}: {e}")
-
-@sio.event
-async def get_online_users(sid):
-    """Restituisce la lista degli utenti online"""
-    try:
-        online_users = [
-            {
-                'email': email,
-                'online': data['online'],
-                'connected_at': data.get('connected_at')
-            }
-            for email, data in connected_users.items()
-            if data['online']
-        ]
-        
-        await sio.emit('online_users', {
-            'users': online_users,
-            'count': len(online_users)
-        }, room=sid)
-        
-        logger.info(f"[SOCKET] Inviata lista utenti online: {len(online_users)} utenti")
-        
-    except Exception as e:
-        logger.error(f"[SOCKET] Errore get_online_users per {sid}: {e}")
-
-
 
 
 @sio.event
@@ -415,7 +383,33 @@ async def leave_chat(sid, data):
         
     except Exception as e:
         logger.error(f"[SOCKET] Errore leave_chat per {sid}: {e}")
+
+
+@sio.event
+async def get_online_users(sid):
+    """Restituisce la lista degli utenti online"""
+    try:
+        online_users = [
+            {
+                'email': email,
+                'online': data['online'],
+                'connected_at': data.get('connected_at')
+            }
+            for email, data in connected_users.items()
+            if data['online']
+        ]
         
+        await sio.emit('online_users', {
+            'users': online_users,
+            'count': len(online_users)
+        }, room=sid)
+        
+        logger.info(f"[SOCKET] Inviata lista utenti online: {len(online_users)} utenti")
+        
+    except Exception as e:
+        logger.error(f"[SOCKET] Errore get_online_users per {sid}: {e}")
+
+
 @sio.event
 async def ping(sid):
     """Risponde al ping del client per mantenere la connessione attiva"""
@@ -442,14 +436,7 @@ async def get_chat_stats():
             'connected_users': online_count,
             'total_users_ever_connected': len(connected_users),
             'active_chats': len(active_chats),
-            'chat_details': {
-                post_id: {
-                    'participants_count': len(chat_info['participants']),
-                    'room_name': chat_info['room_name'],
-                    'created_at': chat_info['created_at']
-                }
-                for post_id, chat_info in active_chats.items()
-            }
+            'timestamp': datetime.utcnow().isoformat()
         }
     except Exception as e:
         logger.error(f"[SOCKET] Errore nel calcolo statistiche: {e}")
