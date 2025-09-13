@@ -11,7 +11,7 @@ services:
       - ./internal/db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./migration_add_livello.sql:/docker-entrypoint-initdb.d/migration_add_livello.sql
       - ./migration_add_iscrizioni.sql:/docker-entrypoint-initdb.d/migration_add_iscrizioni.sql
-      # RIMOSSA: ./migration_add_user_bans.sql (ora creata via codice Go)
+    
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"

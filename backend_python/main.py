@@ -874,6 +874,7 @@ def get_admin_stats_enhanced(request: Request, db: Session = Depends(get_db)):
 
 
 
+
 # Monta Socket.IO correttamente ALLA FINE, dopo tutti gli endpoint
 sio_asgi_app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path="/ws/socket.io")
 

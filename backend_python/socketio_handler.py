@@ -1,6 +1,6 @@
 """
 Socket.IO handler per la chat live tra utenti
-Gestisce le connessioni, i messaggi privati e le room di chat
+Gestisce le connessioni, i messaggi privati e le room di chat con persistenza nel database
 """
 import socketio
 import requests
@@ -8,13 +8,14 @@ import json
 from typing import Dict, List
 from datetime import datetime
 import logging
+from database import SessionLocal
+from models import ChatMessage
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # CORREZIONE: Crea il server Socket.IO con configurazione corretta
-# Correggi la creazione del server Socket.IO
 sio = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins="*",
@@ -52,10 +53,72 @@ async def get_user_info_from_auth_service(session_cookie: str) -> Dict:
 
 
 def create_private_room_name(email1: str, email2: str, post_id: int) -> str:
-    """Crea un nome univoco per la room privata tra due utenti per un post specifico"""
+    """Crea un nome univoco per la room privata tra due utenti"""
     # Ordina le email per garantire sempre lo stesso nome room indipendentemente dall'ordine
     sorted_emails = sorted([email1, email2])
-    return f"post_{post_id}_chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
+    
+    # Gestisce sia chat legate a post che chat generiche
+    if post_id == -1:
+        # Chat generica tra amici
+        return f"friend_chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
+    else:
+        # Chat legata a un post
+        return f"post_{post_id}_chat_{sorted_emails[0].replace('@', '_').replace('.', '_')}_{sorted_emails[1].replace('@', '_').replace('.', '_')}"
+
+
+def save_message_to_database(post_id: int, sender_email: str, recipient_email: str, content: str) -> int:
+    """Salva il messaggio nel database e restituisce l'ID"""
+    db = SessionLocal()
+    try:
+        chat_message = ChatMessage(
+            post_id=post_id,
+            sender_email=sender_email,
+            recipient_email=recipient_email,
+            content=content
+        )
+        db.add(chat_message)
+        db.commit()
+        db.refresh(chat_message)
+        
+        logger.info(f"[CHAT DB] Messaggio salvato con ID {chat_message.id}")
+        return chat_message.id
+    except Exception as e:
+        logger.error(f"[CHAT DB] Errore salvataggio messaggio: {e}")
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def get_chat_history(post_id: int, user_email1: str, user_email2: str, limit: int = 50) -> List[Dict]:
+    """Recupera la cronologia chat tra due utenti per un post"""
+    db = SessionLocal()
+    try:
+        messages = db.query(ChatMessage).filter(
+            ChatMessage.post_id == post_id,
+            ((ChatMessage.sender_email == user_email1) & (ChatMessage.recipient_email == user_email2)) |
+            ((ChatMessage.sender_email == user_email2) & (ChatMessage.recipient_email == user_email1))
+        ).order_by(ChatMessage.created_at.asc()).limit(limit).all()
+        
+        result = []
+        for msg in messages:
+            result.append({
+                'id': str(msg.id),
+                'post_id': msg.post_id,
+                'sender_email': msg.sender_email,
+                'recipient_email': msg.recipient_email,
+                'content': msg.content,
+                'timestamp': msg.created_at.isoformat(),
+                'read': msg.is_read
+            })
+        
+        logger.info(f"[CHAT DB] Recuperati {len(result)} messaggi per post {post_id}")
+        return result
+    except Exception as e:
+        logger.error(f"[CHAT DB] Errore recupero cronologia: {e}")
+        return []
+    finally:
+        db.close()
 
 
 @sio.event
@@ -193,6 +256,16 @@ async def join_post_chat(sid, data):
             if user_email not in active_chats[post_id]['participants']:
                 active_chats[post_id]['participants'].append(user_email)
         
+        # NUOVO: Invia la cronologia messaggi esistenti
+        other_user = post_author_email if user_email != post_author_email else user_email
+        chat_history = get_chat_history(post_id, user_email, other_user)
+        
+        if chat_history:
+            await sio.emit('chat_history', {
+                'post_id': post_id,
+                'messages': chat_history
+            }, room=sid)
+        
         # Notifica che l'utente è entrato nella chat
         await sio.emit('chat_joined', {
             'post_id': post_id,
@@ -236,12 +309,18 @@ async def send_private_message(sid, data):
         
         logger.info(f"[SOCKET] Messaggio da {user_email} a {recipient_email} per post {post_id}: {message_content[:50]}...")
         
+        # NUOVO: Salva il messaggio nel database
+        message_id = save_message_to_database(post_id, user_email, recipient_email, message_content)
+        if not message_id:
+            await sio.emit('error', {'message': 'Errore nel salvataggio del messaggio'}, room=sid)
+            return
+        
         # Crea il nome della room
         room_name = create_private_room_name(user_email, recipient_email, post_id)
         
         # Crea il messaggio
         message = {
-            'id': f"{datetime.utcnow().timestamp()}_{sid}",  # ID temporaneo univoco
+            'id': str(message_id),  # Usa l'ID dal database
             'post_id': post_id,
             'sender_email': user_email,
             'recipient_email': recipient_email,
@@ -250,12 +329,12 @@ async def send_private_message(sid, data):
             'read': False
         }
         
-        # Invia il messaggio a tutti nella room (sender e recipient)
-        await sio.emit('new_private_message', message, room=room_name)
+        # FIX: Invia il messaggio SOLO al destinatario, NON al mittente
+        recipient_room = f"user_{recipient_email.replace('@', '_').replace('.', '_')}"
+        await sio.emit('new_private_message', message, room=recipient_room)
         
         # Se il destinatario è online, invia anche una notifica diretta
         if recipient_email in connected_users and connected_users[recipient_email]['online']:
-            recipient_room = f"user_{recipient_email.replace('@', '_').replace('.', '_')}"
             await sio.emit('message_notification', {
                 'from': user_email,
                 'post_id': post_id,
@@ -265,7 +344,7 @@ async def send_private_message(sid, data):
         
         logger.info(f"[SOCKET] ✅ Messaggio inviato da {user_email} a {recipient_email}")
         
-        # Conferma di invio al mittente
+        # Conferma di invio al mittente (senza il contenuto del messaggio per evitare duplicati)
         await sio.emit('message_sent', {
             'message_id': message['id'],
             'status': 'sent',
@@ -456,4 +535,4 @@ async def cleanup_inactive_users():
         logger.error(f"[SOCKET] Errore durante cleanup: {e}")
 
 
-logger.info("[SOCKET] ✅ Socket.IO handler configurato correttamente")
+logger.info("[SOCKET] ✅ Socket.IO handler configurato correttamente con persistenza messaggi")

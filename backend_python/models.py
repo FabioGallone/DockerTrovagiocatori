@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Time, DateTime, ForeignKey, Text, Float, JSON
+from sqlalchemy import Column, Integer, String, Date, Time, DateTime, ForeignKey, Text, Float, JSON, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -51,3 +51,19 @@ class Comment(Base):
     
     # Relazione con il post
     post = relationship("Post", back_populates="comments")
+
+# NUOVO: Modello per i messaggi chat privati
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id"), nullable=True)  # NULLABLE per chat generiche
+    sender_email = Column(String, nullable=False)
+    recipient_email = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_read = Column(Boolean, default=False)
+    chat_type = Column(String, default="post")  # "post" o "friend"
+    
+    # Relazione con il post (opzionale)
+    post = relationship("Post")
