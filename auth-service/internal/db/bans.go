@@ -170,13 +170,18 @@ func (db *Database) UnbanUser(userID, adminID int64, reason string) error {
 	}
 	defer tx.Rollback()
 
-	// Aggiorna tutti i ban attivi dell'utente
+	// Assicurati che reason non sia vuoto
+	if reason == "" {
+		reason = "Ban rimosso dall'amministratore"
+	}
+
+	// Aggiorna tutti i ban attivi dell'utente - FIX: cast esplicito del tipo
 	result, err := tx.Exec(`
 		UPDATE user_bans 
 		SET is_active = FALSE, 
 		    unbanned_at = CURRENT_TIMESTAMP,
 		    unbanned_by_admin_id = $1,
-		    notes = CONCAT(COALESCE(notes, ''), ' - ', $2)
+		    notes = CONCAT(COALESCE(notes, ''), ' - ', $2::text)
 		WHERE user_id = $3 AND is_active = TRUE`,
 		adminID, reason, userID)
 
@@ -206,6 +211,7 @@ func (db *Database) UnbanUser(userID, adminID int64, reason string) error {
 		userID, adminID, reason)
 	if err != nil {
 		fmt.Printf("Warning: errore inserimento cronologia unban: %v\n", err)
+		// Non interrompiamo il flusso
 	}
 
 	return tx.Commit()
