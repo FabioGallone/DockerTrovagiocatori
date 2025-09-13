@@ -70,17 +70,22 @@ def save_message_to_database(post_id: int, sender_email: str, recipient_email: s
     """Salva il messaggio nel database e restituisce l'ID"""
     db = SessionLocal()
     try:
+        # Determina il tipo di chat e gestisce post_id
+        chat_type = "friend" if post_id == -1 else "post"
+        actual_post_id = None if post_id == -1 else post_id
+        
         chat_message = ChatMessage(
-            post_id=post_id,
+            post_id=actual_post_id,  # NULL se chat tra amici
             sender_email=sender_email,
             recipient_email=recipient_email,
-            content=content
+            content=content,
+            chat_type=chat_type
         )
         db.add(chat_message)
         db.commit()
         db.refresh(chat_message)
         
-        logger.info(f"[CHAT DB] Messaggio salvato con ID {chat_message.id}")
+        logger.info(f"[CHAT DB] Messaggio {chat_type} salvato con ID {chat_message.id}")
         return chat_message.id
     except Exception as e:
         logger.error(f"[CHAT DB] Errore salvataggio messaggio: {e}")
