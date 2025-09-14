@@ -51,11 +51,6 @@ func BanUserHandler(database *db.Database, sm *sessions.SessionManager) http.Han
 			return
 		}
 
-		if banReq.UserID == adminID {
-			http.Error(w, "Non puoi bannare te stesso", http.StatusBadRequest)
-			return
-		}
-
 		if banReq.Reason == "" {
 			banReq.Reason = "Ban amministrativo"
 		}

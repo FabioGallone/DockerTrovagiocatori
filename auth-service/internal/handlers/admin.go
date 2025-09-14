@@ -220,25 +220,6 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 			return
 		}
 
-		// Verifica che non si stia bannando se stesso
-		if adminID == targetUserID {
-			http.Error(w, "Non puoi bannare/sbannare te stesso", http.StatusBadRequest)
-			return
-		}
-
-		// Verifica che non si stia bannando un altro admin
-		isTargetAdmin, err := database.CheckUserIsAdmin(targetUserID)
-		if err != nil {
-			fmt.Printf("[ADMIN] Errore controllo admin status: %v\n", err)
-			http.Error(w, "Errore nel controllo privilegi", http.StatusInternalServerError)
-			return
-		}
-
-		if isTargetAdmin {
-			http.Error(w, "Non puoi bannare un altro amministratore", http.StatusBadRequest)
-			return
-		}
-
 		// Controlla lo stato attuale dell'utente
 		isBanned, _, err := database.IsUserBanned(targetUserID)
 		if err != nil {

@@ -136,7 +136,7 @@ func main() {
 	http.HandleFunc("/admin/users/", handlers.AdminToggleUserStatusHandler(database, sm)) // POST - Toggle status utente
 	http.HandleFunc("/admin/stats", handlers.AdminStatsHandler(database, sm))             // GET - Statistiche dashboard
 
-	// ========== NUOVI ENDPOINT BAN UTENTI ==========
+	// ========== ENDPOINT BAN UTENTI ==========
 	http.HandleFunc("/admin/bans", handlers.GetActiveBansHandler(database, sm))             // GET - Lista ban attivi
 	http.HandleFunc("/admin/ban/user", handlers.BanUserHandler(database, sm))               // POST - Banna utente manualmente
 	http.HandleFunc("/admin/unban/", handlers.UnbanUserHandler(database, sm))               // POST - Rimuovi ban (URL: /admin/unban/{userID})

@@ -70,18 +70,6 @@ func SendFriendRequestHandler(database *db.Database, sm *sessions.SessionManager
 
 		fmt.Printf("[FRIENDS DEBUG] UserID destinatario trovato: %d\n", targetUserID)
 
-		// Verifica che non stia tentando di aggiungere se stesso
-		if targetUserID == userID {
-			fmt.Printf("[FRIENDS ERROR] Tentativo di aggiungere se stesso: userID=%d, targetUserID=%d\n", userID, targetUserID)
-			response := FriendResponse{
-				Success: false,
-				Message: "Non puoi aggiungere te stesso come amico",
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
 		// Verifica che non siano già amici
 		isFriend, err := database.CheckFriendship(userID, targetUserID)
 		if err != nil {
