@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Date, Time, DateTime, ForeignKey, Text, Float, JSON, Boolean
 from sqlalchemy.orm import relationship
-from database import Base
+from database.connection import Base
 from datetime import datetime
 
 class SportField(Base):
@@ -13,9 +13,9 @@ class SportField(Base):
     citta = Column(String, nullable=False)
     lat = Column(Float, nullable=False)
     lng = Column(Float, nullable=False)
-    tipo = Column(String, nullable=True)  # "Sintetico", "Erba naturale", "Terra battuta", etc.
+    tipo = Column(String, nullable=True)
     descrizione = Column(Text, nullable=True)
-    sports_disponibili = Column(JSON, nullable=True)  # Lista di sport supportati
+    sports_disponibili = Column(JSON, nullable=True)
 
 class Post(Base):
     __tablename__ = "posts"
@@ -29,13 +29,9 @@ class Post(Base):
     ora_partita = Column(Time, nullable=False)
     commento = Column(String, nullable=True)
     autore_email = Column(String, nullable=False)
-    # Campo da calcio selezionato (ora rinominato più genericamente)
     campo_id = Column(Integer, ForeignKey("sport_fields.id"), nullable=True)
-    # CAMPO LIVELLO
-    livello = Column(String, nullable=False, default='Intermedio')  # 'Principiante', 'Intermedio', 'Avanzato'
-    # CAMPO NUMERO GIOCATORI
-    numero_giocatori = Column(Integer, nullable=False, default=1)  # Numero di giocatori necessari
-    #  Timestamp di creazione
+    livello = Column(String, nullable=False, default='Intermedio')
+    numero_giocatori = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relazioni
@@ -54,7 +50,6 @@ class Comment(Base):
     # Relazione con il post
     post = relationship("Post", back_populates="comments")
 
-# Modello per i messaggi chat privati 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
@@ -64,5 +59,4 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
-    chat_type = Column(String, default="friend")  # "post" o "friend"
-    
+    chat_type = Column(String, default="friend")

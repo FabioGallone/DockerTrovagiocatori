@@ -1,21 +1,8 @@
 from pydantic import BaseModel, validator
 from datetime import datetime, date, time
 from typing import List, Optional
-
-class SportFieldResponse(BaseModel):
-    id: int
-    nome: str
-    indirizzo: str
-    provincia: str
-    citta: str
-    lat: float
-    lng: float
-    tipo: Optional[str] = None
-    descrizione: Optional[str] = None
-    sports_disponibili: Optional[List[str]] = []
-
-    class Config:
-        orm_mode = True
+from schemas.field import SportFieldResponse
+from schemas.comment import CommentResponse
 
 class PostCreate(BaseModel):
     titolo: str
@@ -25,9 +12,9 @@ class PostCreate(BaseModel):
     data_partita: date
     ora_partita: time
     commento: str
-    campo_id: Optional[int] = None  # Campo sportivo selezionato
-    livello: str = "Intermedio"  # NUOVO CAMPO LIVELLO con default
-    numero_giocatori: int = 1  # NUOVO CAMPO NUMERO GIOCATORI
+    campo_id: Optional[int] = None
+    livello: str = "Intermedio"
+    numero_giocatori: int = 1
 
     @validator('numero_giocatori')
     def validate_numero_giocatori(cls, v):
@@ -54,22 +41,6 @@ class PostCreate(BaseModel):
                     raise ValueError("data_partita deve essere nel formato dd-MM-yyyy oppure yyyy-MM-dd")
         return v
 
-class CommentCreate(BaseModel):
-    contenuto: str
-
-class CommentResponse(BaseModel):
-    id: int
-    post_id: int
-    autore_email: str
-    contenuto: str
-    created_at: datetime
-    autore_username: Optional[str] = None
-    autore_nome: Optional[str] = None
-    autore_cognome: Optional[str] = None
-
-    class Config:
-        orm_mode = True
-
 class PostResponse(BaseModel):
     id: int
     titolo: str
@@ -81,10 +52,10 @@ class PostResponse(BaseModel):
     commento: str
     autore_email: str
     campo_id: Optional[int] = None
-    campo: Optional[SportFieldResponse] = None  # Informazioni complete del campo sportivo
+    campo: Optional[SportFieldResponse] = None
     comments: Optional[List[CommentResponse]] = []
-    livello: str = "Intermedio"  # NUOVO CAMPO LIVELLO
-    numero_giocatori: int = 1  # NUOVO CAMPO NUMERO GIOCATORI
+    livello: str = "Intermedio"
+    numero_giocatori: int = 1
 
     class Config:
         orm_mode = True

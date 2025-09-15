@@ -1,4 +1,3 @@
-# Usa l'immagine di base Python
 FROM python:3.11
 
 # Imposta la cartella di lavoro dentro il container
