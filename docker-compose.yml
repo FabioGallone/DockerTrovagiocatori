@@ -5,13 +5,12 @@ services:
     restart: always
     environment:
       POSTGRES_USER: APG
-      POSTGRES_PASSWORD: 123ciao
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  
       POSTGRES_DB: ProgCarc
     volumes:
       - ./internal/db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./migration_add_livello.sql:/docker-entrypoint-initdb.d/migration_add_livello.sql
       - ./migration_add_iscrizioni.sql:/docker-entrypoint-initdb.d/migration_add_iscrizioni.sql
-    
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
@@ -24,7 +23,7 @@ services:
     environment:
       DB_HOST: db
       DB_USER: APG
-      DB_PASSWORD: 123ciao
+      DB_PASSWORD: ${DB_PASSWORD}  
       DB_NAME: ProgCarc
     depends_on:
       - db
@@ -40,7 +39,7 @@ services:
     environment:
       DB_HOST: db
       DB_USER: APG
-      DB_PASSWORD: 123ciao
+      DB_PASSWORD: ${DB_PASSWORD}  # ← Usa variabile d'ambiente
       DB_NAME: ProgCarc
     depends_on:
       - db

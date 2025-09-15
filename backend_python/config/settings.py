@@ -5,8 +5,12 @@ class Settings:
     # Database
     DB_HOST: str = os.getenv("DB_HOST", "localhost")
     DB_USER: str = os.getenv("DB_USER", "APG")
-    DB_PASSWORD: str = os.getenv("DB_PASSWORD", "123ciao")
+    DB_PASSWORD: str = os.getenv("DB_PASSWORD")  
     DB_NAME: str = os.getenv("DB_NAME", "ProgCarc")
+    
+    def __init__(self):
+        if not self.DB_PASSWORD:
+            raise ValueError("DB_PASSWORD environment variable is required")
     
     @property
     def DATABASE_URL(self) -> str:

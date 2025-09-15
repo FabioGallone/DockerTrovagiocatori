@@ -26,7 +26,7 @@ func LoadConfig() *Config {
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
 			User:     getEnv("DB_USER", "APG"),
-			Password: getEnv("DB_PASSWORD", "123ciao"),
+			Password: getEnv("DB_PASSWORD", ""),  
 			Name:     getEnv("DB_NAME", "ProgCarc"),
 		},
 		Server: ServerConfig{
@@ -34,10 +34,9 @@ func LoadConfig() *Config {
 		},
 	}
 
-	// Verifica che le variabili critiche siano presenti
-	if config.Database.Host == "" || config.Database.User == "" || 
-	   config.Database.Password == "" || config.Database.Name == "" {
-		log.Fatal("Database environment variables are not set")
+	// Verifica che la password sia presente
+	if config.Database.Password == "" {
+		log.Fatal("DB_PASSWORD environment variable is required")
 	}
 
 	return config
