@@ -1,4 +1,3 @@
-// auth-service/internal/handlers/notifications.go
 package handlers
 
 import (
@@ -6,28 +5,35 @@ import (
 	"net/http"
 	"strconv"
 
-	"trovagiocatoriAuth/internal/db"
+	"trovagiocatoriAuth/internal/database/repositories"
+	"trovagiocatoriAuth/internal/middleware"
+	"trovagiocatoriAuth/internal/models"
 	"trovagiocatoriAuth/internal/sessions"
 )
 
+type NotificationHandler struct {
+	notificationRepo *repositories.NotificationRepository
+	sm               *sessions.SessionManager
+}
+
+func NewNotificationHandler(notificationRepo *repositories.NotificationRepository, sm *sessions.SessionManager) *NotificationHandler {
+	return &NotificationHandler{
+		notificationRepo: notificationRepo,
+		sm:               sm,
+	}
+}
+
 // NotificationResponse rappresenta la risposta per le operazioni sulle notifiche
 type NotificationResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
+	Success bool        `json:"success"`
+	Message string      `json:"message,omitempty"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
 // GetNotificationsHandler restituisce le notifiche dell'utente
-func GetNotificationsHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+func (h *NotificationHandler) GetNotificationsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verifica autenticazione
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		userID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
 			return
@@ -52,7 +58,7 @@ func GetNotificationsHandler(database *db.Database, sm *sessions.SessionManager)
 		}
 
 		// Ottieni le notifiche
-		notifications, err := database.GetUserNotifications(userID, limit, offset)
+		notifications, err := h.notificationRepo.GetUserNotifications(userID, limit, offset)
 		if err != nil {
 			http.Error(w, "Errore durante il recupero delle notifiche", http.StatusInternalServerError)
 			return
@@ -63,9 +69,9 @@ func GetNotificationsHandler(database *db.Database, sm *sessions.SessionManager)
 			Success: true,
 			Data: map[string]interface{}{
 				"notifications": notifications,
-				"count":        len(notifications),
-				"limit":        limit,
-				"offset":       offset,
+				"count":         len(notifications),
+				"limit":         limit,
+				"offset":        offset,
 			},
 		}
 
@@ -75,23 +81,16 @@ func GetNotificationsHandler(database *db.Database, sm *sessions.SessionManager)
 }
 
 // GetNotificationsSummaryHandler restituisce un riassunto delle notifiche
-func GetNotificationsSummaryHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+func (h *NotificationHandler) GetNotificationsSummaryHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verifica autenticazione
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		userID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
 			return
 		}
 
 		// Ottieni il riassunto delle notifiche
-		summary, err := database.GetNotificationsSummary(userID)
+		summary, err := h.notificationRepo.GetNotificationsSummary(userID)
 		if err != nil {
 			http.Error(w, "Errore durante il recupero del riassunto notifiche", http.StatusInternalServerError)
 			return
@@ -109,16 +108,9 @@ func GetNotificationsSummaryHandler(database *db.Database, sm *sessions.SessionM
 }
 
 // MarkNotificationAsReadHandler segna una notifica come letta
-func MarkNotificationAsReadHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+func (h *NotificationHandler) MarkNotificationAsReadHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verifica autenticazione
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		userID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
 			return
@@ -138,7 +130,7 @@ func MarkNotificationAsReadHandler(database *db.Database, sm *sessions.SessionMa
 		}
 
 		// Segna come letta
-		err = database.MarkNotificationAsRead(notificationID, userID)
+		err = h.notificationRepo.MarkNotificationAsRead(notificationID, userID)
 		if err != nil {
 			if err.Error() == "notifica non trovata o non autorizzata" {
 				http.Error(w, err.Error(), http.StatusNotFound)
@@ -160,23 +152,16 @@ func MarkNotificationAsReadHandler(database *db.Database, sm *sessions.SessionMa
 }
 
 // MarkAllNotificationsAsReadHandler segna tutte le notifiche come lette
-func MarkAllNotificationsAsReadHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+func (h *NotificationHandler) MarkAllNotificationsAsReadHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verifica autenticazione
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		userID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
 			return
 		}
 
 		// Segna tutte come lette
-		err = database.MarkAllNotificationsAsRead(userID)
+		err = h.notificationRepo.MarkAllNotificationsAsRead(userID)
 		if err != nil {
 			http.Error(w, "Errore durante l'aggiornamento delle notifiche", http.StatusInternalServerError)
 			return
@@ -194,16 +179,9 @@ func MarkAllNotificationsAsReadHandler(database *db.Database, sm *sessions.Sessi
 }
 
 // DeleteNotificationHandler elimina una notifica
-func DeleteNotificationHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+func (h *NotificationHandler) DeleteNotificationHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verifica autenticazione
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		userID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
 			return
@@ -223,7 +201,7 @@ func DeleteNotificationHandler(database *db.Database, sm *sessions.SessionManage
 		}
 
 		// Elimina la notifica
-		err = database.DeleteNotification(notificationID, userID)
+		err = h.notificationRepo.DeleteNotification(notificationID, userID)
 		if err != nil {
 			if err.Error() == "notifica non trovata o non autorizzata" {
 				http.Error(w, err.Error(), http.StatusNotFound)
@@ -245,31 +223,24 @@ func DeleteNotificationHandler(database *db.Database, sm *sessions.SessionManage
 }
 
 // NotificationTestHandler - Endpoint per testare le notifiche (solo per sviluppo)
-func NotificationTestHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
+func (h *NotificationHandler) NotificationTestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verifica autenticazione
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := sm.GetUserIDBySessionID(cookie.Value)
+		userID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
 			return
 		}
 
 		// Crea una notifica di test
-		notification := &db.Notification{
+		notification := &models.Notification{
 			UserID:  userID,
-			Type:    db.NotificationTypeGeneral,
+			Type:    models.NotificationTypeGeneral,
 			Title:   "Notifica di Test",
 			Message: "Questa è una notifica di test per verificare il sistema",
-			Status:  db.NotificationStatusUnread,
+			Status:  models.NotificationStatusUnread,
 		}
 
-		err = database.CreateNotification(notification)
+		err = h.notificationRepo.CreateNotification(notification)
 		if err != nil {
 			http.Error(w, "Errore durante la creazione della notifica di test", http.StatusInternalServerError)
 			return

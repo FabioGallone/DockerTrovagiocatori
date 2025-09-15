@@ -1,4 +1,3 @@
-// auth-service/internal/handlers/admin.go
 package handlers
 
 import (
@@ -9,48 +8,31 @@ import (
 	"strings"
 	"time"
 
-	"trovagiocatoriAuth/internal/db"
+	"trovagiocatoriAuth/internal/database/repositories"
+	"trovagiocatoriAuth/internal/middleware"
+	"trovagiocatoriAuth/internal/models"
 	"trovagiocatoriAuth/internal/sessions"
 )
 
-// Middleware per verificare privilegi admin
-func requireAdmin(database *db.Database, sm *sessions.SessionManager, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			fmt.Printf("[ADMIN] No session cookie found\n")
-			http.Error(w, "Unauthorized: session_id non presente", http.StatusUnauthorized)
-			return
-		}
+type AdminHandler struct {
+	adminRepo *repositories.AdminRepository
+	userRepo  *repositories.UserRepository
+	banRepo   *repositories.BanRepository
+	sm        *sessions.SessionManager
+}
 
-		userID, err := sm.GetUserIDBySessionID(cookie.Value)
-		if err != nil {
-			fmt.Printf("[ADMIN] Invalid session: %v\n", err)
-			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
-			return
-		}
-
-		isAdmin, err := database.CheckUserIsAdmin(userID)
-		if err != nil {
-			fmt.Printf("[ADMIN] Error checking admin status for userID %d: %v\n", userID, err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		if !isAdmin {
-			fmt.Printf("[ADMIN] Access denied for userID %d: not an admin\n", userID)
-			http.Error(w, "Forbidden: privilegi amministratore richiesti", http.StatusForbidden)
-			return
-		}
-
-		fmt.Printf("[ADMIN] Access granted for admin userID %d\n", userID)
-		next(w, r)
+func NewAdminHandler(adminRepo *repositories.AdminRepository, userRepo *repositories.UserRepository, banRepo *repositories.BanRepository, sm *sessions.SessionManager) *AdminHandler {
+	return &AdminHandler{
+		adminRepo: adminRepo,
+		userRepo:  userRepo,
+		banRepo:   banRepo,
+		sm:        sm,
 	}
 }
 
 // AdminDeletePostHandler elimina un post (solo admin)
-func AdminDeletePostHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandler) AdminDeletePostHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		// Estrai post_id dall'URL
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) < 4 {
@@ -110,12 +92,12 @@ func AdminDeletePostHandler(database *db.Database, sm *sessions.SessionManager) 
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
+	}
 }
 
 // AdminDeleteCommentHandler elimina un commento (solo admin)
-func AdminDeleteCommentHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandler) AdminDeleteCommentHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		// Estrai comment_id dall'URL
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) < 4 {
@@ -172,15 +154,15 @@ func AdminDeleteCommentHandler(database *db.Database, sm *sessions.SessionManage
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
+	}
 }
 
 // AdminGetUsersHandler restituisce tutti gli utenti per il pannello admin
-func AdminGetUsersHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandler) AdminGetUsersHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[ADMIN] Richiesta lista utenti\n")
 
-		users, err := database.GetAllUsers()
+		users, err := h.adminRepo.GetAllUsers()
 		if err != nil {
 			fmt.Printf("[ADMIN] Errore nel recupero utenti: %v\n", err)
 			http.Error(w, "Errore interno del server", http.StatusInternalServerError)
@@ -191,12 +173,12 @@ func AdminGetUsersHandler(database *db.Database, sm *sessions.SessionManager) ht
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(users)
-	})
+	}
 }
 
-// AdminToggleUserStatusHandler ora gestisce BAN/UNBAN invece di semplice attiva/disattiva
-func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+// AdminToggleUserStatusHandler gestisce BAN/UNBAN invece di semplice attiva/disattiva
+func (h *AdminHandler) AdminToggleUserStatusHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		// Estrai user_id dall'URL
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) < 5 {
@@ -213,15 +195,14 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 		fmt.Printf("[ADMIN] Toggle ban status per utente %d\n", targetUserID)
 
 		// Ottieni admin ID dalla sessione
-		cookie, _ := r.Cookie("session_id")
-		adminID, err := sm.GetUserIDBySessionID(cookie.Value)
+		adminID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Sessione non valida", http.StatusUnauthorized)
 			return
 		}
 
 		// Controlla lo stato attuale dell'utente
-		isBanned, _, err := database.IsUserBanned(targetUserID)
+		isBanned, _, err := h.banRepo.IsUserBanned(targetUserID)
 		if err != nil {
 			fmt.Printf("[ADMIN] Errore controllo ban utente %d: %v\n", targetUserID, err)
 			http.Error(w, "Errore nel controllo dello status utente", http.StatusInternalServerError)
@@ -232,7 +213,7 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 			// L'utente è bannato -> SBAN
 			fmt.Printf("[ADMIN] Rimozione ban per utente %d da admin %d\n", targetUserID, adminID)
 
-			err = database.UnbanUser(targetUserID, adminID, "Ban rimosso dall'amministratore via pannello admin")
+			err = h.banRepo.UnbanUser(targetUserID, adminID, "Ban rimosso dall'amministratore via pannello admin")
 			if err != nil {
 				fmt.Printf("[ADMIN] Errore rimozione ban utente %d: %v\n", targetUserID, err)
 				http.Error(w, "Errore nella rimozione del ban", http.StatusInternalServerError)
@@ -246,7 +227,7 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 				"message":    "Utente sbannato e riattivato con successo",
 				"user_id":    targetUserID,
 				"is_banned":  false,
-				"new_status": true, // L'utente è ora attivo
+				"new_status": true,
 				"action":     "unbanned",
 			}
 
@@ -256,19 +237,16 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 			// L'utente NON è bannato -> BAN PERMANENTE
 			fmt.Printf("[ADMIN] Applicazione ban permanente per utente %d da admin %d\n", targetUserID, adminID)
 
-			// CORREZIONE: Crea una richiesta di ban permanente senza BanType
-			banReq := &db.BanUserRequest{
-				UserID: targetUserID,
-				Reason: "Ban amministrativo permanente tramite pannello admin",
-				Notes:  "Banned permanently via admin toggle",
-			}
-
 			// Ottieni IP e User-Agent per audit
 			ipAddress := getClientIP(r)
 			userAgent := r.UserAgent()
 
-			// Applica il ban permanente
-			ban, err := database.BanUser(banReq, adminID, ipAddress, userAgent)
+			// Applica il ban permanente - CORREZIONE: usa models.BanUserRequest
+			ban, err := h.banRepo.BanUser(&models.BanUserRequest{
+				UserID: targetUserID,
+				Reason: "Ban amministrativo permanente tramite pannello admin",
+				Notes:  "Banned permanently via admin toggle",
+			}, adminID, ipAddress, userAgent)
 			if err != nil {
 				fmt.Printf("[ADMIN] Errore applicazione ban utente %d: %v\n", targetUserID, err)
 				http.Error(w, "Errore nell'applicazione del ban", http.StatusInternalServerError)
@@ -282,7 +260,7 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 				"message":    "Utente bannato permanentemente",
 				"user_id":    targetUserID,
 				"is_banned":  true,
-				"new_status": false, // L'utente è ora inattivo
+				"new_status": false,
 				"ban_info":   ban,
 				"action":     "banned_permanent",
 			}
@@ -290,19 +268,16 @@ func AdminToggleUserStatusHandler(database *db.Database, sm *sessions.SessionMan
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 		}
-
-		// Aggiorna le statistiche
-		// await LoadDashboardStats(); // Questo è per il client, qui non serve
-	})
+	}
 }
 
 // AdminStatsHandler restituisce statistiche per il dashboard admin
-func AdminStatsHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandler) AdminStatsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[ADMIN] Richiesta statistiche dashboard\n")
 
 		// Ottieni statistiche dal database Go
-		totalUsers, err := database.GetTotalUsersCount()
+		totalUsers, err := h.adminRepo.GetTotalUsersCount()
 		if err != nil {
 			fmt.Printf("[ADMIN] Errore nel conteggio utenti: %v\n", err)
 			totalUsers = 0
@@ -353,7 +328,7 @@ func AdminStatsHandler(database *db.Database, sm *sessions.SessionManager) http.
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(stats)
-	})
+	}
 }
 
 // Helper function per estrarre interi da map
@@ -371,4 +346,27 @@ func getIntFromMap(m map[string]interface{}, key string, defaultValue int) int {
 		}
 	}
 	return defaultValue
+}
+
+// Helper function per ottenere l'IP del client
+func getClientIP(r *http.Request) string {
+	// Controlla gli header standard per proxy
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		// Prendi solo il primo IP se ce ne sono multipli
+		ips := strings.Split(forwarded, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP != "" {
+		return realIP
+	}
+
+	// Fallback sull'IP remoto
+	ip := r.RemoteAddr
+	if strings.Contains(ip, ":") {
+		ip = strings.Split(ip, ":")[0]
+	}
+	return ip
 }

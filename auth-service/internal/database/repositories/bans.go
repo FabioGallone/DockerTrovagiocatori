@@ -1,101 +1,23 @@
-// auth-service/internal/db/bans.go
-package db
+package repositories
 
 import (
 	"database/sql"
 	"fmt"
-	"time"
+
+	"trovagiocatoriAuth/internal/models"
 )
 
-// UserBan rappresenta un ban di un utente
-type UserBan struct {
-	ID              int64      `json:"id"`
-	UserID          int64      `json:"user_id"`
-	BannedByAdminID int64      `json:"banned_by_admin_id"`
-	Reason          string     `json:"reason"`
-	BannedAt        time.Time  `json:"banned_at"`
-	UnbannedAt      *time.Time `json:"unbanned_at,omitempty"`
-	UnbannedByID    *int64     `json:"unbanned_by_admin_id,omitempty"`
-	IsActive        bool       `json:"is_active"`
-	Notes           string     `json:"notes"`
-
-	// Informazioni aggiuntive per la visualizzazione
-	Username      string `json:"username"`
-	Email         string `json:"email"`
-	AdminUsername string `json:"admin_username"`
+type BanRepository struct {
+	db *sql.DB
 }
 
-// BanHistory rappresenta una voce nella cronologia dei ban
-type BanHistory struct {
-	ID        int64     `json:"id"`
-	UserID    int64     `json:"user_id"`
-	AdminID   int64     `json:"admin_id"`
-	Action    string    `json:"action"`
-	Reason    string    `json:"reason"`
-	CreatedAt time.Time `json:"created_at"`
-	BanID     *int64    `json:"ban_id,omitempty"`
-
-	// Informazioni aggiuntive
-	Username      string `json:"username"`
-	AdminUsername string `json:"admin_username"`
-}
-
-// BanUserRequest rappresenta una richiesta di ban
-type BanUserRequest struct {
-	UserID int64  `json:"user_id"`
-	Reason string `json:"reason"`
-	Notes  string `json:"notes"`
-}
-
-// CreateBanTablesIfNotExists crea le tabelle per i ban se non esistono
-func (db *Database) CreateBanTablesIfNotExists() error {
-	fmt.Println("🔧 Inizializzazione sistema ban...")
-
-	// 1. Crea tabella user_bans SEMPLIFICATA
-	_, err := db.Conn.Exec(`
-		CREATE TABLE IF NOT EXISTS user_bans (
-			id SERIAL PRIMARY KEY,
-			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			banned_by_admin_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
-			reason TEXT DEFAULT 'Ban amministrativo',
-			banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			unbanned_at TIMESTAMP NULL,
-			unbanned_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-			is_active BOOLEAN DEFAULT TRUE,
-			notes TEXT
-		)`)
-	if err != nil {
-		return fmt.Errorf("errore nella creazione della tabella user_bans: %v", err)
-	}
-
-	// 2. Crea tabella ban_history
-	_, err = db.Conn.Exec(`
-		CREATE TABLE IF NOT EXISTS ban_history (
-			id SERIAL PRIMARY KEY,
-			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			admin_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
-			action VARCHAR(20) NOT NULL,
-			reason TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			ban_id INTEGER REFERENCES user_bans(id) ON DELETE SET NULL
-		)`)
-	if err != nil {
-		return fmt.Errorf("errore nella creazione della tabella ban_history: %v", err)
-	}
-
-	// 3. Crea indici per performance
-	db.Conn.Exec(`CREATE INDEX IF NOT EXISTS idx_user_bans_user_id ON user_bans(user_id)`)
-	db.Conn.Exec(`CREATE INDEX IF NOT EXISTS idx_user_bans_active ON user_bans(is_active)`)
-	db.Conn.Exec(`CREATE INDEX IF NOT EXISTS idx_ban_history_user_id ON ban_history(user_id)`)
-	db.Conn.Exec(`CREATE INDEX IF NOT EXISTS idx_ban_history_created_at ON ban_history(created_at)`)
-
-	fmt.Println("✔ Tabelle ban create/verificate con successo!")
-	return nil
+func NewBanRepository(db *sql.DB) *BanRepository {
+	return &BanRepository{db: db}
 }
 
 // BanUser banna un utente
-func (db *Database) BanUser(ban *BanUserRequest, adminID int64, ipAddress, userAgent string) (*UserBan, error) {
-	tx, err := db.Conn.Begin()
+func (r *BanRepository) BanUser(ban *models.BanUserRequest, adminID int64, ipAddress, userAgent string) (*models.UserBan, error) {
+	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +41,7 @@ func (db *Database) BanUser(ban *BanUserRequest, adminID int64, ipAddress, userA
 		return nil, fmt.Errorf("utente già bannato")
 	}
 
-	// Inserisci il nuovo ban (SEMPLIFICATO)
+	// Inserisci il nuovo ban
 	var banID int64
 	err = tx.QueryRow(`
 		INSERT INTO user_bans (user_id, banned_by_admin_id, reason, notes)
@@ -153,12 +75,12 @@ func (db *Database) BanUser(ban *BanUserRequest, adminID int64, ipAddress, userA
 	}
 
 	// Ottieni il ban appena creato con tutte le informazioni
-	return db.GetBanByID(banID)
+	return r.GetBanByID(banID)
 }
 
 // UnbanUser rimuove il ban di un utente
-func (db *Database) UnbanUser(userID, adminID int64, reason string) error {
-	tx, err := db.Conn.Begin()
+func (r *BanRepository) UnbanUser(userID, adminID int64, reason string) error {
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -169,7 +91,7 @@ func (db *Database) UnbanUser(userID, adminID int64, reason string) error {
 		reason = "Ban rimosso dall'amministratore"
 	}
 
-	// Aggiorna tutti i ban attivi dell'utente - FIX: cast esplicito del tipo
+	// Aggiorna tutti i ban attivi dell'utente
 	result, err := tx.Exec(`
 		UPDATE user_bans 
 		SET is_active = FALSE, 
@@ -205,15 +127,14 @@ func (db *Database) UnbanUser(userID, adminID int64, reason string) error {
 		userID, adminID, reason)
 	if err != nil {
 		fmt.Printf("Warning: errore inserimento cronologia unban: %v\n", err)
-		// Non interrompiamo il flusso
 	}
 
 	return tx.Commit()
 }
 
 // IsUserBanned controlla se un utente è attualmente bannato
-func (db *Database) IsUserBanned(userID int64) (bool, *UserBan, error) {
-	ban, err := db.GetActiveBanByUserID(userID)
+func (r *BanRepository) IsUserBanned(userID int64) (bool, *models.UserBan, error) {
+	ban, err := r.GetActiveBanByUserID(userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil, nil
@@ -221,12 +142,11 @@ func (db *Database) IsUserBanned(userID int64) (bool, *UserBan, error) {
 		return false, nil, err
 	}
 
-	// Per i ban permanenti, è sempre attivo
 	return true, ban, nil
 }
 
 // GetActiveBanByUserID ottiene il ban attivo di un utente
-func (db *Database) GetActiveBanByUserID(userID int64) (*UserBan, error) {
+func (r *BanRepository) GetActiveBanByUserID(userID int64) (*models.UserBan, error) {
 	query := `
 		SELECT 
 			ub.id, ub.user_id, ub.banned_by_admin_id, ub.reason, ub.banned_at,
@@ -240,8 +160,8 @@ func (db *Database) GetActiveBanByUserID(userID int64) (*UserBan, error) {
 		ORDER BY ub.banned_at DESC
 		LIMIT 1`
 
-	ban := &UserBan{}
-	err := db.Conn.QueryRow(query, userID).Scan(
+	ban := &models.UserBan{}
+	err := r.db.QueryRow(query, userID).Scan(
 		&ban.ID, &ban.UserID, &ban.BannedByAdminID, &ban.Reason, &ban.BannedAt,
 		&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.Notes,
 		&ban.Username, &ban.Email, &ban.AdminUsername,
@@ -255,7 +175,7 @@ func (db *Database) GetActiveBanByUserID(userID int64) (*UserBan, error) {
 }
 
 // GetBanByID ottiene un ban per ID
-func (db *Database) GetBanByID(banID int64) (*UserBan, error) {
+func (r *BanRepository) GetBanByID(banID int64) (*models.UserBan, error) {
 	query := `
 		SELECT 
 			ub.id, ub.user_id, ub.banned_by_admin_id, ub.reason, ub.banned_at,
@@ -267,8 +187,8 @@ func (db *Database) GetBanByID(banID int64) (*UserBan, error) {
 		JOIN users admin ON ub.banned_by_admin_id = admin.id
 		WHERE ub.id = $1`
 
-	ban := &UserBan{}
-	err := db.Conn.QueryRow(query, banID).Scan(
+	ban := &models.UserBan{}
+	err := r.db.QueryRow(query, banID).Scan(
 		&ban.ID, &ban.UserID, &ban.BannedByAdminID, &ban.Reason, &ban.BannedAt,
 		&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.Notes,
 		&ban.Username, &ban.Email, &ban.AdminUsername,
@@ -282,7 +202,7 @@ func (db *Database) GetBanByID(banID int64) (*UserBan, error) {
 }
 
 // GetAllActiveBans ottiene tutti i ban attivi
-func (db *Database) GetAllActiveBans() ([]UserBan, error) {
+func (r *BanRepository) GetAllActiveBans() ([]models.UserBan, error) {
 	query := `
 		SELECT 
 			ub.id, ub.user_id, ub.banned_by_admin_id, ub.reason, ub.banned_at,
@@ -295,15 +215,15 @@ func (db *Database) GetAllActiveBans() ([]UserBan, error) {
 		WHERE ub.is_active = TRUE
 		ORDER BY ub.banned_at DESC`
 
-	rows, err := db.Conn.Query(query)
+	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var bans []UserBan
+	var bans []models.UserBan
 	for rows.Next() {
-		var ban UserBan
+		var ban models.UserBan
 		err := rows.Scan(
 			&ban.ID, &ban.UserID, &ban.BannedByAdminID, &ban.Reason, &ban.BannedAt,
 			&ban.UnbannedAt, &ban.UnbannedByID, &ban.IsActive, &ban.Notes,
@@ -319,7 +239,7 @@ func (db *Database) GetAllActiveBans() ([]UserBan, error) {
 }
 
 // GetUserBanHistory ottiene la cronologia dei ban di un utente
-func (db *Database) GetUserBanHistory(userID int64) ([]BanHistory, error) {
+func (r *BanRepository) GetUserBanHistory(userID int64) ([]map[string]interface{}, error) {
 	query := `
 		SELECT 
 			bh.id, bh.user_id, bh.admin_id, bh.action, bh.reason, bh.created_at,
@@ -331,30 +251,46 @@ func (db *Database) GetUserBanHistory(userID int64) ([]BanHistory, error) {
 		WHERE bh.user_id = $1
 		ORDER BY bh.created_at DESC`
 
-	rows, err := db.Conn.Query(query, userID)
+	rows, err := r.db.Query(query, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var history []BanHistory
+	var history []map[string]interface{}
 	for rows.Next() {
-		var h BanHistory
+		var id, userIDVal, adminID int64
+		var action, reason, username string
+		var createdAt string
+		var banID sql.NullInt64
 		var adminUsername sql.NullString
 
 		err := rows.Scan(
-			&h.ID, &h.UserID, &h.AdminID, &h.Action, &h.Reason, &h.CreatedAt,
-			&h.BanID,
-			&h.Username, &adminUsername,
+			&id, &userIDVal, &adminID, &action, &reason, &createdAt,
+			&banID, &username, &adminUsername,
 		)
 		if err != nil {
 			return nil, err
 		}
 
+		adminName := "Sistema"
 		if adminUsername.Valid {
-			h.AdminUsername = adminUsername.String
-		} else {
-			h.AdminUsername = "Sistema"
+			adminName = adminUsername.String
+		}
+
+		h := map[string]interface{}{
+			"id":             id,
+			"user_id":        userIDVal,
+			"admin_id":       adminID,
+			"action":         action,
+			"reason":         reason,
+			"created_at":     createdAt,
+			"username":       username,
+			"admin_username": adminName,
+		}
+
+		if banID.Valid {
+			h["ban_id"] = banID.Int64
 		}
 
 		history = append(history, h)
@@ -364,12 +300,12 @@ func (db *Database) GetUserBanHistory(userID int64) ([]BanHistory, error) {
 }
 
 // GetBanStats ottiene statistiche sui ban
-func (db *Database) GetBanStats() (map[string]interface{}, error) {
+func (r *BanRepository) GetBanStats() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
 	// Conta ban attivi
 	var activeBans int
-	err := db.Conn.QueryRow("SELECT COUNT(*) FROM user_bans WHERE is_active = TRUE").Scan(&activeBans)
+	err := r.db.QueryRow("SELECT COUNT(*) FROM user_bans WHERE is_active = TRUE").Scan(&activeBans)
 	if err != nil {
 		activeBans = 0
 	}
@@ -377,7 +313,7 @@ func (db *Database) GetBanStats() (map[string]interface{}, error) {
 
 	// Conta ban totali
 	var totalBans int
-	err = db.Conn.QueryRow("SELECT COUNT(*) FROM user_bans").Scan(&totalBans)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM user_bans").Scan(&totalBans)
 	if err != nil {
 		totalBans = 0
 	}
@@ -385,7 +321,7 @@ func (db *Database) GetBanStats() (map[string]interface{}, error) {
 
 	// Conta ban rimossi oggi
 	var unbannedToday int
-	err = db.Conn.QueryRow(`
+	err = r.db.QueryRow(`
 		SELECT COUNT(*) FROM user_bans 
 		WHERE unbanned_at::date = CURRENT_DATE AND is_active = FALSE`).Scan(&unbannedToday)
 	if err != nil {
@@ -397,8 +333,8 @@ func (db *Database) GetBanStats() (map[string]interface{}, error) {
 }
 
 // CleanupExpiredBans pulisce automaticamente i ban scaduti
-func (db *Database) CleanupExpiredBans() error {
-	_, err := db.Conn.Exec(`
+func (r *BanRepository) CleanupExpiredBans() error {
+	_, err := r.db.Exec(`
 		UPDATE user_bans 
 		SET is_active = FALSE, 
 		    unbanned_at = CURRENT_TIMESTAMP,

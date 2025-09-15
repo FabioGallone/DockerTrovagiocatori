@@ -1,4 +1,3 @@
-// auth-service/internal/handlers/bans.go
 package handlers
 
 import (
@@ -8,9 +7,25 @@ import (
 	"strconv"
 	"strings"
 
-	"trovagiocatoriAuth/internal/db"
+	"trovagiocatoriAuth/internal/database/repositories"
+	"trovagiocatoriAuth/internal/middleware"
+	"trovagiocatoriAuth/internal/models"
 	"trovagiocatoriAuth/internal/sessions"
 )
+
+type BanHandler struct {
+	banRepo  *repositories.BanRepository
+	userRepo *repositories.UserRepository
+	sm       *sessions.SessionManager
+}
+
+func NewBanHandler(banRepo *repositories.BanRepository, userRepo *repositories.UserRepository, sm *sessions.SessionManager) *BanHandler {
+	return &BanHandler{
+		banRepo:  banRepo,
+		userRepo: userRepo,
+		sm:       sm,
+	}
+}
 
 // BanResponse rappresenta la risposta per le operazioni sui ban
 type BanResponse struct {
@@ -21,25 +36,19 @@ type BanResponse struct {
 }
 
 // BanUserHandler banna un utente (richiesta POST)
-func BanUserHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *BanHandler) BanUserHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[BAN] Richiesta ban utente\n")
 
 		// Ottieni admin ID dalla sessione
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		adminID, err := sm.GetUserIDBySessionID(cookie.Value)
+		adminID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		// Decodifica la richiesta
-		var banReq db.BanUserRequest
+		var banReq models.BanUserRequest
 		if err := json.NewDecoder(r.Body).Decode(&banReq); err != nil {
 			http.Error(w, "Formato richiesta non valido", http.StatusBadRequest)
 			return
@@ -60,7 +69,7 @@ func BanUserHandler(database *db.Database, sm *sessions.SessionManager) http.Han
 		userAgent := r.UserAgent()
 
 		// Esegui il ban
-		ban, err := database.BanUser(&banReq, adminID, ipAddress, userAgent)
+		ban, err := h.banRepo.BanUser(&banReq, adminID, ipAddress, userAgent)
 		if err != nil {
 			fmt.Printf("[BAN] Errore nel ban utente %d: %v\n", banReq.UserID, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -78,12 +87,12 @@ func BanUserHandler(database *db.Database, sm *sessions.SessionManager) http.Han
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
+	}
 }
 
 // UnbanUserHandler rimuove il ban di un utente
-func UnbanUserHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *BanHandler) UnbanUserHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		// Estrai user_id dall'URL
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) < 4 {
@@ -98,13 +107,16 @@ func UnbanUserHandler(database *db.Database, sm *sessions.SessionManager) http.H
 		}
 
 		// Ottieni admin ID dalla sessione
-		cookie, _ := r.Cookie("session_id")
-		adminID, _ := sm.GetUserIDBySessionID(cookie.Value)
+		adminID, err := middleware.GetUserIDFromSession(r, h.sm)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 		fmt.Printf("[BAN] Tentativo rimozione ban utente %d da admin %d\n", userID, adminID)
 
 		// Rimuovi il ban
-		err = database.UnbanUser(userID, adminID, "Ban rimosso dall'amministratore")
+		err = h.banRepo.UnbanUser(userID, adminID, "Ban rimosso dall'amministratore")
 		if err != nil {
 			fmt.Printf("[BAN] Errore rimozione ban utente %d: %v\n", userID, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -120,15 +132,15 @@ func UnbanUserHandler(database *db.Database, sm *sessions.SessionManager) http.H
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
+	}
 }
 
 // GetActiveBansHandler ottiene tutti i ban attivi
-func GetActiveBansHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *BanHandler) GetActiveBansHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[BAN] Richiesta lista ban attivi\n")
 
-		bans, err := database.GetAllActiveBans()
+		bans, err := h.banRepo.GetAllActiveBans()
 		if err != nil {
 			fmt.Printf("[BAN] Errore recupero ban attivi: %v\n", err)
 			http.Error(w, "Errore nel recupero dei ban attivi", http.StatusInternalServerError)
@@ -142,12 +154,12 @@ func GetActiveBansHandler(database *db.Database, sm *sessions.SessionManager) ht
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
+	}
 }
 
 // GetUserBanHandler ottiene informazioni sui ban di un utente specifico
-func GetUserBanHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *BanHandler) GetUserBanHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		// Estrai user_id dall'URL
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) < 5 {
@@ -162,7 +174,7 @@ func GetUserBanHandler(database *db.Database, sm *sessions.SessionManager) http.
 		}
 
 		// Controlla se l'utente è bannato
-		isBanned, ban, err := database.IsUserBanned(userID)
+		isBanned, ban, err := h.banRepo.IsUserBanned(userID)
 		if err != nil {
 			fmt.Printf("[BAN] Errore controllo ban utente %d: %v\n", userID, err)
 			http.Error(w, "Errore nel controllo del ban", http.StatusInternalServerError)
@@ -180,12 +192,12 @@ func GetUserBanHandler(database *db.Database, sm *sessions.SessionManager) http.
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
+	}
 }
 
 // GetUserBanHistoryHandler ottiene la cronologia dei ban di un utente
-func GetUserBanHistoryHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *BanHandler) GetUserBanHistoryHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		// Estrai user_id dall'URL
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) < 5 {
@@ -199,7 +211,7 @@ func GetUserBanHistoryHandler(database *db.Database, sm *sessions.SessionManager
 			return
 		}
 
-		history, err := database.GetUserBanHistory(userID)
+		history, err := h.banRepo.GetUserBanHistory(userID)
 		if err != nil {
 			fmt.Printf("[BAN] Errore recupero cronologia ban utente %d: %v\n", userID, err)
 			http.Error(w, "Errore nel recupero della cronologia", http.StatusInternalServerError)
@@ -213,15 +225,15 @@ func GetUserBanHistoryHandler(database *db.Database, sm *sessions.SessionManager
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
+	}
 }
 
 // GetBanStatsHandler ottiene statistiche sui ban
-func GetBanStatsHandler(database *db.Database, sm *sessions.SessionManager) http.HandlerFunc {
-	return requireAdmin(database, sm, func(w http.ResponseWriter, r *http.Request) {
+func (h *BanHandler) GetBanStatsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[BAN] Richiesta statistiche ban\n")
 
-		stats, err := database.GetBanStats()
+		stats, err := h.banRepo.GetBanStats()
 		if err != nil {
 			fmt.Printf("[BAN] Errore recupero statistiche: %v\n", err)
 			http.Error(w, "Errore nel recupero delle statistiche", http.StatusInternalServerError)
@@ -235,28 +247,5 @@ func GetBanStatsHandler(database *db.Database, sm *sessions.SessionManager) http
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	})
-}
-
-// Helper function per ottenere l'IP del client
-func getClientIP(r *http.Request) string {
-	// Controlla gli header standard per proxy
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		// Prendi solo il primo IP se ce ne sono multipli
-		ips := strings.Split(forwarded, ",")
-		return strings.TrimSpace(ips[0])
 	}
-
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return realIP
-	}
-
-	// Fallback sull'IP remoto
-	ip := r.RemoteAddr
-	if strings.Contains(ip, ":") {
-		ip = strings.Split(ip, ":")[0]
-	}
-	return ip
 }

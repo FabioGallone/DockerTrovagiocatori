@@ -41,18 +41,17 @@ func (sm *SessionManager) GetUserIDBySessionID(sessionID string) (int64, error) 
 	return userID, nil
 }
 
-// Genera un ID sessione casuale
+func (sm *SessionManager) DeleteSession(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	delete(sm.sessions, sessionID)
+}
+
+// generateSessionID genera un ID sessione casuale
 func generateSessionID(n int) (string, error) {
 	bytes := make([]byte, n)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", errors.New("impossibile generare un ID di sessione sicuro")
 	}
 	return hex.EncodeToString(bytes), nil
-}
-
-// In sessions/session.go, aggiungi:
-func (sm *SessionManager) DeleteSession(sessionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	delete(sm.sessions, sessionID)
 }

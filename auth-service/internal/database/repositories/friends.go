@@ -1,76 +1,24 @@
-// auth-service/internal/db/friends.go - Versione pulita
-package db
+package repositories
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
+
+	"trovagiocatoriAuth/internal/models"
 )
 
-// CreateFriendsTablesIfNotExists - Crea le tabelle per gli amici se non esistono
-func (db *Database) CreateFriendsTablesIfNotExists() error {
-	// Tabella delle amicizie
-	_, err := db.Conn.Exec(`
-	CREATE TABLE IF NOT EXISTS friendships (
-		id SERIAL PRIMARY KEY,
-		user1_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		user2_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(user1_id, user2_id),
-		CHECK(user1_id != user2_id),
-		CHECK(user1_id < user2_id)
-	);
-	`)
-	if err != nil {
-		return fmt.Errorf("errore nella creazione della tabella friendships: %v", err)
-	}
-
-	// Tabella delle richieste di amicizia
-	_, err = db.Conn.Exec(`
-	CREATE TABLE IF NOT EXISTS friend_requests (
-		id SERIAL PRIMARY KEY,
-		sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		status VARCHAR(20) DEFAULT 'pending',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(sender_id, receiver_id),
-		CHECK(sender_id != receiver_id),
-		CHECK(status IN ('pending', 'accepted', 'rejected', 'cancelled'))
-	);
-	`)
-	if err != nil {
-		return fmt.Errorf("errore nella creazione della tabella friend_requests: %v", err)
-	}
-
-	// Indici per migliorare le performance
-	_, err = db.Conn.Exec(`
-	CREATE INDEX IF NOT EXISTS idx_friendships_user1 ON friendships(user1_id);
-	CREATE INDEX IF NOT EXISTS idx_friendships_user2 ON friendships(user2_id);
-	CREATE INDEX IF NOT EXISTS idx_friend_requests_sender ON friend_requests(sender_id);
-	CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver ON friend_requests(receiver_id);
-	CREATE INDEX IF NOT EXISTS idx_friend_requests_status ON friend_requests(status);
-	`)
-	if err != nil {
-		return fmt.Errorf("errore nella creazione degli indici: %v", err)
-	}
-
-	fmt.Println("✔ Tabelle degli amici create/verificate con successo!")
-	return nil
+type FriendRepository struct {
+	db *sql.DB
 }
 
-// GetUserIDByEmail - Ottiene l'ID utente tramite email
-func (db *Database) GetUserIDByEmail(email string) (int64, error) {
-	var userID int64
-	err := db.Conn.QueryRow("SELECT id FROM users WHERE email = $1", email).Scan(&userID)
-	if err != nil {
-		return 0, err
-	}
-	return userID, nil
+func NewFriendRepository(db *sql.DB) *FriendRepository {
+	return &FriendRepository{db: db}
 }
 
 // SendFriendRequest - Invia una richiesta di amicizia
-func (db *Database) SendFriendRequest(senderID, receiverID int64) error {
-	_, err := db.Conn.Exec(`
+func (r *FriendRepository) SendFriendRequest(senderID, receiverID int64) error {
+	_, err := r.db.Exec(`
 		INSERT INTO friend_requests (sender_id, receiver_id, status) 
 		VALUES ($1, $2, 'pending')
 		ON CONFLICT (sender_id, receiver_id) 
@@ -80,9 +28,9 @@ func (db *Database) SendFriendRequest(senderID, receiverID int64) error {
 }
 
 // CheckPendingFriendRequest - Controlla se esiste una richiesta di amicizia pendente
-func (db *Database) CheckPendingFriendRequest(userID1, userID2 int64) (bool, error) {
+func (r *FriendRepository) CheckPendingFriendRequest(userID1, userID2 int64) (bool, error) {
 	var count int
-	err := db.Conn.QueryRow(`
+	err := r.db.QueryRow(`
 		SELECT COUNT(*) FROM friend_requests 
 		WHERE ((sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1))
 		AND status = 'pending'`,
@@ -96,14 +44,14 @@ func (db *Database) CheckPendingFriendRequest(userID1, userID2 int64) (bool, err
 }
 
 // CheckFriendship - Controlla se due utenti sono amici
-func (db *Database) CheckFriendship(userID1, userID2 int64) (bool, error) {
+func (r *FriendRepository) CheckFriendship(userID1, userID2 int64) (bool, error) {
 	// Assicurati che user1_id < user2_id per la query
 	if userID1 > userID2 {
 		userID1, userID2 = userID2, userID1
 	}
 
 	var count int
-	err := db.Conn.QueryRow(`
+	err := r.db.QueryRow(`
 		SELECT COUNT(*) FROM friendships 
 		WHERE user1_id = $1 AND user2_id = $2`,
 		userID1, userID2).Scan(&count)
@@ -116,8 +64,8 @@ func (db *Database) CheckFriendship(userID1, userID2 int64) (bool, error) {
 }
 
 // AcceptFriendRequest - Accetta una richiesta di amicizia
-func (db *Database) AcceptFriendRequest(requestID, receiverID int64) error {
-	tx, err := db.Conn.Begin()
+func (r *FriendRepository) AcceptFriendRequest(requestID, receiverID int64) error {
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -173,10 +121,10 @@ func (db *Database) AcceptFriendRequest(requestID, receiverID int64) error {
 }
 
 // RejectFriendRequest - Rifiuta una richiesta di amicizia
-func (db *Database) RejectFriendRequest(requestID, receiverID int64) error {
+func (r *FriendRepository) RejectFriendRequest(requestID, receiverID int64) error {
 	// Verifica che l'utente sia il destinatario della richiesta
 	var actualReceiverID int64
-	err := db.Conn.QueryRow(`
+	err := r.db.QueryRow(`
 		SELECT receiver_id FROM friend_requests 
 		WHERE id = $1 AND status = 'pending'`, requestID).Scan(&actualReceiverID)
 
@@ -189,7 +137,7 @@ func (db *Database) RejectFriendRequest(requestID, receiverID int64) error {
 	}
 
 	// Aggiorna lo status della richiesta
-	_, err = db.Conn.Exec(`
+	_, err = r.db.Exec(`
 		UPDATE friend_requests 
 		SET status = 'rejected', updated_at = CURRENT_TIMESTAMP 
 		WHERE id = $1`, requestID)
@@ -198,13 +146,13 @@ func (db *Database) RejectFriendRequest(requestID, receiverID int64) error {
 }
 
 // RemoveFriendship - Rimuove un'amicizia
-func (db *Database) RemoveFriendship(userID1, userID2 int64) error {
+func (r *FriendRepository) RemoveFriendship(userID1, userID2 int64) error {
 	// Assicurati che user1_id < user2_id per la query
 	if userID1 > userID2 {
 		userID1, userID2 = userID2, userID1
 	}
 
-	_, err := db.Conn.Exec(`
+	_, err := r.db.Exec(`
 		DELETE FROM friendships 
 		WHERE user1_id = $1 AND user2_id = $2`,
 		userID1, userID2)
@@ -213,8 +161,8 @@ func (db *Database) RemoveFriendship(userID1, userID2 int64) error {
 }
 
 // GetFriendsList - Ottiene la lista degli amici di un utente
-func (db *Database) GetFriendsList(userID int64) ([]FriendInfo, error) {
-	rows, err := db.Conn.Query(`
+func (r *FriendRepository) GetFriendsList(userID int64) ([]models.FriendInfo, error) {
+	rows, err := r.db.Query(`
 		SELECT 
 			CASE 
 				WHEN f.user1_id = $1 THEN u2.id
@@ -253,9 +201,9 @@ func (db *Database) GetFriendsList(userID int64) ([]FriendInfo, error) {
 	}
 	defer rows.Close()
 
-	var friends []FriendInfo
+	var friends []models.FriendInfo
 	for rows.Next() {
-		var friend FriendInfo
+		var friend models.FriendInfo
 		var createdAt time.Time
 
 		err := rows.Scan(
@@ -279,8 +227,8 @@ func (db *Database) GetFriendsList(userID int64) ([]FriendInfo, error) {
 }
 
 // GetFriendRequests - Ottiene le richieste di amicizia ricevute
-func (db *Database) GetFriendRequests(userID int64) ([]FriendRequestInfo, error) {
-	rows, err := db.Conn.Query(`
+func (r *FriendRepository) GetFriendRequests(userID int64) ([]models.FriendRequestInfo, error) {
+	rows, err := r.db.Query(`
 		SELECT 
 			fr.id,
 			u.id,
@@ -302,9 +250,9 @@ func (db *Database) GetFriendRequests(userID int64) ([]FriendRequestInfo, error)
 	}
 	defer rows.Close()
 
-	var requests []FriendRequestInfo
+	var requests []models.FriendRequestInfo
 	for rows.Next() {
-		var request FriendRequestInfo
+		var request models.FriendRequestInfo
 		var createdAt time.Time
 
 		err := rows.Scan(
@@ -330,8 +278,8 @@ func (db *Database) GetFriendRequests(userID int64) ([]FriendRequestInfo, error)
 }
 
 // GetSentFriendRequests - Ottiene le richieste di amicizia inviate
-func (db *Database) GetSentFriendRequests(userID int64) ([]FriendRequestInfo, error) {
-	rows, err := db.Conn.Query(`
+func (r *FriendRepository) GetSentFriendRequests(userID int64) ([]models.FriendRequestInfo, error) {
+	rows, err := r.db.Query(`
 		SELECT 
 			fr.id,
 			u.id,
@@ -353,9 +301,9 @@ func (db *Database) GetSentFriendRequests(userID int64) ([]FriendRequestInfo, er
 	}
 	defer rows.Close()
 
-	var requests []FriendRequestInfo
+	var requests []models.FriendRequestInfo
 	for rows.Next() {
-		var request FriendRequestInfo
+		var request models.FriendRequestInfo
 		var createdAt time.Time
 
 		err := rows.Scan(
@@ -381,10 +329,10 @@ func (db *Database) GetSentFriendRequests(userID int64) ([]FriendRequestInfo, er
 }
 
 // CancelFriendRequest - Annulla una richiesta di amicizia inviata
-func (db *Database) CancelFriendRequest(requestID, senderID int64) error {
+func (r *FriendRepository) CancelFriendRequest(requestID, senderID int64) error {
 	// Verifica che l'utente sia il mittente della richiesta
 	var actualSenderID int64
-	err := db.Conn.QueryRow(`
+	err := r.db.QueryRow(`
 		SELECT sender_id FROM friend_requests 
 		WHERE id = $1 AND status = 'pending'`, requestID).Scan(&actualSenderID)
 
@@ -397,7 +345,7 @@ func (db *Database) CancelFriendRequest(requestID, senderID int64) error {
 	}
 
 	// Aggiorna lo status della richiesta
-	_, err = db.Conn.Exec(`
+	_, err = r.db.Exec(`
 		UPDATE friend_requests 
 		SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
 		WHERE id = $1`, requestID)
@@ -406,8 +354,8 @@ func (db *Database) CancelFriendRequest(requestID, senderID int64) error {
 }
 
 // SearchUsers - Cerca utenti per username o email (escludendo se stesso e già amici)
-func (db *Database) SearchUsers(searchTerm string, currentUserID int64) ([]UserSearchResult, error) {
-	rows, err := db.Conn.Query(`
+func (r *FriendRepository) SearchUsers(searchTerm string, currentUserID int64) ([]models.UserSearchResult, error) {
+	rows, err := r.db.Query(`
 		SELECT DISTINCT
 			u.id,
 			u.username,
@@ -446,9 +394,9 @@ func (db *Database) SearchUsers(searchTerm string, currentUserID int64) ([]UserS
 	}
 	defer rows.Close()
 
-	var users []UserSearchResult
+	var users []models.UserSearchResult
 	for rows.Next() {
-		var user UserSearchResult
+		var user models.UserSearchResult
 
 		err := rows.Scan(
 			&user.UserID,
@@ -466,11 +414,10 @@ func (db *Database) SearchUsers(searchTerm string, currentUserID int64) ([]UserS
 	}
 
 	return users, rows.Err()
-
-
 }
 
-func (db *Database) GetLatestFriendRequestID(senderID, receiverID int64) (int64, error) {
+// GetLatestFriendRequestID ottiene l'ID della richiesta più recente
+func (r *FriendRepository) GetLatestFriendRequestID(senderID, receiverID int64) (int64, error) {
 	var requestID int64
 	query := `
 		SELECT id FROM friend_requests 
@@ -478,7 +425,7 @@ func (db *Database) GetLatestFriendRequestID(senderID, receiverID int64) (int64,
 		ORDER BY created_at DESC 
 		LIMIT 1`
 
-	err := db.Conn.QueryRow(query, senderID, receiverID).Scan(&requestID)
+	err := r.db.QueryRow(query, senderID, receiverID).Scan(&requestID)
 	if err != nil {
 		return 0, err
 	}
@@ -486,107 +433,24 @@ func (db *Database) GetLatestFriendRequestID(senderID, receiverID int64) (int64,
 }
 
 // GetFriendRequestReceiver ottiene l'ID del destinatario di una richiesta di amicizia
-func (db *Database) GetFriendRequestReceiver(requestID int64) (int64, error) {
+func (r *FriendRepository) GetFriendRequestReceiver(requestID int64) (int64, error) {
 	var receiverID int64
 	query := `SELECT receiver_id FROM friend_requests WHERE id = $1`
 
-	err := db.Conn.QueryRow(query, requestID).Scan(&receiverID)
+	err := r.db.QueryRow(query, requestID).Scan(&receiverID)
 	if err != nil {
 		return 0, err
 	}
 	return receiverID, nil
 }
 
-// GetFriendRequestDetails ottiene i dettagli completi di una richiesta di amicizia
-func (db *Database) GetFriendRequestDetails(requestID int64) (*FriendRequestDetails, error) {
-	query := `
-		SELECT 
-			fr.id, fr.sender_id, fr.receiver_id, fr.status, fr.created_at,
-			u_sender.username as sender_username, u_sender.nome as sender_nome, u_sender.cognome as sender_cognome,
-			u_receiver.username as receiver_username, u_receiver.nome as receiver_nome, u_receiver.cognome as receiver_cognome
-		FROM friend_requests fr
-		JOIN users u_sender ON fr.sender_id = u_sender.id
-		JOIN users u_receiver ON fr.receiver_id = u_receiver.id
-		WHERE fr.id = $1`
-
-	var details FriendRequestDetails
-	err := db.Conn.QueryRow(query, requestID).Scan(
-		&details.ID,
-		&details.SenderID,
-		&details.ReceiverID,
-		&details.Status,
-		&details.CreatedAt,
-		&details.SenderUsername,
-		&details.SenderNome,
-		&details.SenderCognome,
-		&details.ReceiverUsername,
-		&details.ReceiverNome,
-		&details.ReceiverCognome,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &details, nil
-}
-
 // GetUserUnreadFriendRequestsCount ottiene il numero di richieste di amicizia non lette
-func (db *Database) GetUserUnreadFriendRequestsCount(userID int64) (int, error) {
+func (r *FriendRepository) GetUserUnreadFriendRequestsCount(userID int64) (int, error) {
 	var count int
 	query := `
 		SELECT COUNT(*) FROM friend_requests 
 		WHERE receiver_id = $1 AND status = 'pending'`
 
-	err := db.Conn.QueryRow(query, userID).Scan(&count)
+	err := r.db.QueryRow(query, userID).Scan(&count)
 	return count, err
 }
-
-// Strutture dati per le funzioni sopra
-
-type FriendInfo struct {
-	UserID       int64  `json:"user_id"`
-	Username     string `json:"username"`
-	Nome         string `json:"nome"`
-	Cognome      string `json:"cognome"`
-	Email        string `json:"email"`
-	ProfilePic   string `json:"profile_picture"`
-	FriendsSince string `json:"friends_since"`
-}
-
-type FriendRequestInfo struct {
-	RequestID   int64  `json:"request_id"`
-	UserID      int64  `json:"user_id"`
-	Username    string `json:"username"`
-	Nome        string `json:"nome"`
-	Cognome     string `json:"cognome"`
-	Email       string `json:"email"`
-	ProfilePic  string `json:"profile_picture"`
-	RequestDate string `json:"request_date"`
-	Status      string `json:"status"`
-}
-
-type UserSearchResult struct {
-	UserID     int64  `json:"user_id"`
-	Username   string `json:"username"`
-	Nome       string `json:"nome"`
-	Cognome    string `json:"cognome"`
-	Email      string `json:"email"`
-	ProfilePic string `json:"profile_picture"`
-}
-
-
-type FriendRequestDetails struct {
-	ID               int64     `json:"id"`
-	SenderID         int64     `json:"sender_id"`
-	ReceiverID       int64     `json:"receiver_id"`
-	Status           string    `json:"status"`
-	CreatedAt        time.Time `json:"created_at"`
-	SenderUsername   string    `json:"sender_username"`
-	SenderNome       string    `json:"sender_nome"`
-	SenderCognome    string    `json:"sender_cognome"`
-	ReceiverUsername string    `json:"receiver_username"`
-	ReceiverNome     string    `json:"receiver_nome"`
-	ReceiverCognome  string    `json:"receiver_cognome"`
-}
-
