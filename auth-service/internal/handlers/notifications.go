@@ -7,7 +7,7 @@ import (
 
 	"trovagiocatoriAuth/internal/database/repositories"
 	"trovagiocatoriAuth/internal/middleware"
-	"trovagiocatoriAuth/internal/models"
+
 	"trovagiocatoriAuth/internal/sessions"
 )
 
