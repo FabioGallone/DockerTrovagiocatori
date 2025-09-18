@@ -16,8 +16,8 @@ func NewBanRepository(db *sql.DB) *BanRepository {
 }
 
 // BanUser banna un utente
-func (r *BanRepository) BanUser(ban *models.BanUserRequest, adminID int64, ipAddress, userAgent string) (*models.UserBan, error) {
-	tx, err := r.db.Begin()
+func (r *BanRepository) BanUser(ban *models.BanUserRequest, adminID int64) (*models.UserBan, error) {
+	tx, err := r.db.Begin() // Una transazione è un insieme di operazioni sul database che devono essere eseguite tutte insieme o nessuna.
 	if err != nil {
 		return nil, err
 	}
@@ -41,13 +41,18 @@ func (r *BanRepository) BanUser(ban *models.BanUserRequest, adminID int64, ipAdd
 		return nil, fmt.Errorf("utente già bannato")
 	}
 
+	reason := ban.Reason
+	if reason == "" {
+		reason = "Ban amministrativo"
+	}
+
 	// Inserisci il nuovo ban
 	var banID int64
 	err = tx.QueryRow(`
 		INSERT INTO user_bans (user_id, banned_by_admin_id, reason, notes)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id`,
-		ban.UserID, adminID, ban.Reason, ban.Notes,
+		ban.UserID, adminID, reason, ban.Notes,
 	).Scan(&banID)
 
 	if err != nil {
@@ -60,11 +65,11 @@ func (r *BanRepository) BanUser(ban *models.BanUserRequest, adminID int64, ipAdd
 		return nil, fmt.Errorf("errore nella disattivazione dell'utente: %v", err)
 	}
 
-	// Aggiungi alla cronologia
+	// Aggiungi alla tabella ban_history
 	_, err = tx.Exec(`
 		INSERT INTO ban_history (user_id, admin_id, action, reason, ban_id)
 		VALUES ($1, $2, 'banned', $3, $4)`,
-		ban.UserID, adminID, ban.Reason, banID)
+		ban.UserID, adminID, reason, banID)
 	if err != nil {
 		fmt.Printf("Warning: errore inserimento cronologia: %v\n", err)
 	}
@@ -74,7 +79,7 @@ func (r *BanRepository) BanUser(ban *models.BanUserRequest, adminID int64, ipAdd
 		return nil, err
 	}
 
-	// Ottieni il ban appena creato con tutte le informazioni
+	// Ban appena creato con tutte le informazioni
 	return r.GetBanByID(banID)
 }
 
@@ -86,7 +91,6 @@ func (r *BanRepository) UnbanUser(userID, adminID int64, reason string) error {
 	}
 	defer tx.Rollback()
 
-	// Assicurati che reason non sia vuoto
 	if reason == "" {
 		reason = "Ban rimosso dall'amministratore"
 	}
@@ -332,16 +336,3 @@ func (r *BanRepository) GetBanStats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
-// CleanupExpiredBans pulisce automaticamente i ban scaduti
-func (r *BanRepository) CleanupExpiredBans() error {
-	_, err := r.db.Exec(`
-		UPDATE user_bans 
-		SET is_active = FALSE, 
-		    unbanned_at = CURRENT_TIMESTAMP,
-		    notes = CONCAT(COALESCE(notes, ''), ' - Auto-unbanned: expired')
-		WHERE is_active = TRUE 
-		AND expires_at IS NOT NULL 
-		AND expires_at < CURRENT_TIMESTAMP`)
-
-	return err
-}

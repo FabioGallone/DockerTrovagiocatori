@@ -151,7 +151,7 @@ type UserBan struct {
 
 // BanUserRequest rappresenta una richiesta di ban
 type BanUserRequest struct {
-	UserID int64  `json:"user_id"`
-	Reason string `json:"reason"`
-	Notes  string `json:"notes"`
+    UserID int64  `json:"user_id"`
+    Reason string `json:"reason,omitempty"` 
+    Notes  string `json:"notes"`
 }

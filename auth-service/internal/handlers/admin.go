@@ -46,12 +46,11 @@ func (h *AdminHandler) AdminDeletePostHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[ADMIN] Tentativo eliminazione post %d\n", postID)
+		fmt.Printf("[ADMIN] Attempting to delete post %d\n", postID)
 
 		// Chiama il backend Python per eliminare il post
-		pythonURL := "http://backend_python:8000/admin/posts/" + strconv.Itoa(postID)
+		pythonURL := "http://backend_python:8000/admin/posts/" + strconv.Itoa(postID) //convertire un intero in una stringa 
 
-		// Propaga il cookie di sessione
 		cookie, _ := r.Cookie("session_id")
 
 		// Crea richiesta DELETE al Python backend
@@ -81,7 +80,7 @@ func (h *AdminHandler) AdminDeletePostHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[ADMIN] ✅ Post %d eliminato con successo\n", postID)
+		fmt.Printf("[ADMIN] Post %d successfully deleted\n", postID)
 
 		// Risposta successo
 		response := map[string]interface{}{
@@ -98,6 +97,7 @@ func (h *AdminHandler) AdminDeletePostHandler() http.HandlerFunc {
 // AdminDeleteCommentHandler elimina un commento (solo admin)
 func (h *AdminHandler) AdminDeleteCommentHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
 		// Estrai comment_id dall'URL
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) < 4 {
@@ -111,7 +111,7 @@ func (h *AdminHandler) AdminDeleteCommentHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[ADMIN] Tentativo eliminazione commento %d\n", commentID)
+		fmt.Printf("[ADMIN] Attempting to delete comment %d\n", commentID)
 
 		// Chiama il backend Python per eliminare il commento
 		pythonURL := "http://backend_python:8000/admin/comments/" + strconv.Itoa(commentID)
@@ -144,7 +144,8 @@ func (h *AdminHandler) AdminDeleteCommentHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[ADMIN] ✅ Commento %d eliminato con successo\n", commentID)
+		fmt.Printf("[ADMIN] Comment %d successfully deleted\n", commentID)
+
 
 		response := map[string]interface{}{
 			"success":    true,
@@ -160,23 +161,24 @@ func (h *AdminHandler) AdminDeleteCommentHandler() http.HandlerFunc {
 // AdminGetUsersHandler restituisce tutti gli utenti per il pannello admin
 func (h *AdminHandler) AdminGetUsersHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("[ADMIN] Richiesta lista utenti\n")
+		fmt.Printf("[ADMIN] Requesting user list\n")
 
 		users, err := h.adminRepo.GetAllUsers()
 		if err != nil {
-			fmt.Printf("[ADMIN] Errore nel recupero utenti: %v\n", err)
+			fmt.Printf("[ADMIN] Error retrieving users: %v\n", err)
 			http.Error(w, "Errore interno del server", http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Printf("[ADMIN] ✅ Recuperati %d utenti\n", len(users))
+		fmt.Printf("[ADMIN] Retrieved %d users\n", len(users))
+
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(users)
 	}
 }
 
-// AdminToggleUserStatusHandler gestisce BAN/UNBAN invece di semplice attiva/disattiva
+// AdminToggleUserStatusHandler gestisce BAN/UNBAN 
 func (h *AdminHandler) AdminToggleUserStatusHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Estrai user_id dall'URL
@@ -237,23 +239,18 @@ func (h *AdminHandler) AdminToggleUserStatusHandler() http.HandlerFunc {
 			// L'utente NON è bannato -> BAN PERMANENTE
 			fmt.Printf("[ADMIN] Applicazione ban permanente per utente %d da admin %d\n", targetUserID, adminID)
 
-			// Ottieni IP e User-Agent per audit
-			ipAddress := getClientIP(r)
-			userAgent := r.UserAgent()
-
-			// Applica il ban permanente - CORREZIONE: usa models.BanUserRequest
+			// Applica il ban permanente
 			ban, err := h.banRepo.BanUser(&models.BanUserRequest{
 				UserID: targetUserID,
-				Reason: "Ban amministrativo permanente tramite pannello admin",
 				Notes:  "Banned permanently via admin toggle",
-			}, adminID, ipAddress, userAgent)
+			}, adminID) 
 			if err != nil {
-				fmt.Printf("[ADMIN] Errore applicazione ban utente %d: %v\n", targetUserID, err)
+				fmt.Printf("[ADMIN] Error applying ban for user %d: %v\n", targetUserID, err)
 				http.Error(w, "Errore nell'applicazione del ban", http.StatusInternalServerError)
 				return
 			}
 
-			fmt.Printf("[ADMIN] ✅ Utente %d bannato permanentemente\n", targetUserID)
+			fmt.Printf("[ADMIN] User %d permanently banned\n", targetUserID)
 
 			response := map[string]interface{}{
 				"success":    true,
@@ -274,7 +271,7 @@ func (h *AdminHandler) AdminToggleUserStatusHandler() http.HandlerFunc {
 // AdminStatsHandler restituisce statistiche per il dashboard admin
 func (h *AdminHandler) AdminStatsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("[ADMIN] Richiesta statistiche dashboard\n")
+		fmt.Printf("[ADMIN] Requesting dashboard statistics\n")
 
 		// Ottieni statistiche dal database Go
 		totalUsers, err := h.adminRepo.GetTotalUsersCount()
@@ -324,7 +321,7 @@ func (h *AdminHandler) AdminStatsHandler() http.HandlerFunc {
 			"generated_at":       time.Now().Format("2006-01-02 15:04:05"),
 		}
 
-		fmt.Printf("[ADMIN] ✅ Statistiche generate: %+v\n", stats)
+		fmt.Printf("[ADMIN] ✅ Statistics generated: %+v\n", stats)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(stats)
@@ -348,25 +345,3 @@ func getIntFromMap(m map[string]interface{}, key string, defaultValue int) int {
 	return defaultValue
 }
 
-// Helper function per ottenere l'IP del client
-func getClientIP(r *http.Request) string {
-	// Controlla gli header standard per proxy
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		// Prendi solo il primo IP se ce ne sono multipli
-		ips := strings.Split(forwarded, ",")
-		return strings.TrimSpace(ips[0])
-	}
-
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return realIP
-	}
-
-	// Fallback sull'IP remoto
-	ip := r.RemoteAddr
-	if strings.Contains(ip, ":") {
-		ip = strings.Split(ip, ":")[0]
-	}
-	return ip
-}

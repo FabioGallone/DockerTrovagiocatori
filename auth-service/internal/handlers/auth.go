@@ -174,7 +174,7 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 		}
 
 		if isBanned && banInfo != nil {
-			fmt.Printf("[LOGIN] Access denied - User %d is banned: %s\n", userID, banInfo.Reason)
+			fmt.Printf("[LOGIN] Access denied - User %d is banned\n", userID)
 
 			banResponse := &BanInfo{
 				Reason:   banInfo.Reason,
@@ -182,9 +182,6 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 			}
 
 			message := "Il tuo account è stato bannato permanentemente."
-			if banInfo.Reason != "" && banInfo.Reason != "Ban amministrativo" {
-				message += fmt.Sprintf(" Motivo: %s", banInfo.Reason)
-			}
 
 			response := LoginResponse{
 				Success: false,
@@ -201,23 +198,23 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 		// Controllo attivo
 		isActive, err := h.userRepo.IsUserActive(userID)
 		if err != nil {
-			fmt.Printf("[LOGIN] Errore controllo stato attivo per userID %d: %v\n", userID, err)
+			fmt.Printf("[LOGIN] Error checking active status for userID %d: %v\n", userID, err)
 			h.respondWithError(w, "Errore interno del server", http.StatusInternalServerError)
 			return
 		}
 
 		if !isActive {
-			fmt.Printf("[LOGIN] ❌ Accesso negato - Utente %d non è attivo\n", userID)
+			fmt.Printf("[LOGIN] ❌ Access denied - User %d is not active\n", userID)
 			h.respondWithError(w, "Account non attivo. Contatta l'amministratore.", http.StatusForbidden)
 			return
 		}
 
 		// Crea sessione
-		fmt.Printf("[LOGIN] ✅ Controlli superati, creazione sessione per userID: %d\n", userID)
+		fmt.Printf("[LOGIN] ✅ Checks passed, creating session for userID: %d\n", userID)
 
 		sessionID, err := h.sm.CreateSession(userID)
 		if err != nil {
-			fmt.Printf("[LOGIN] Errore creazione sessione per userID %d: %v\n", userID, err)
+			fmt.Printf("[LOGIN] Error creating session for userID %d: %v\n", userID, err)
 			h.respondWithError(w, "Errore nella creazione della sessione", http.StatusInternalServerError)
 			return
 		}
@@ -229,7 +226,7 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 			Path:  "/",
 		})
 
-		fmt.Printf("[LOGIN] ✅ Login completato con successo per userID %d, SessionID: %s\n", userID, sessionID)
+		fmt.Printf("[LOGIN] ✅ Login successfully completed for userID %d, SessionID: %s\n", userID, sessionID)
 
 		response := LoginResponse{
 			Success: true,
@@ -325,10 +322,10 @@ func (h *AuthHandler) GetUserByEmailHandler() http.HandlerFunc {
 		user, err := h.userRepo.GetUserByEmail(email)
 		switch {
 		case err == sql.ErrNoRows:
-			http.Error(w, "User not found", http.StatusNotFound)
+			http.Error(w, "Utente non trovato", http.StatusNotFound)
 		case err != nil:
 			log.Printf("GetUserByEmailHandler: DB error for email %s: %v\n", email, err)
-			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Errore del database: "+err.Error(), http.StatusInternalServerError)
 		default:
 			log.Printf("GetUserByEmailHandler: Found user %s, isAdmin=%t\n", user.Email, user.IsAdmin)
 			w.Header().Set("Content-Type", "application/json")

@@ -57,7 +57,7 @@ func (h *FriendHandler) SendFriendRequestHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[FRIENDS DEBUG] Richiesta amicizia da userID %d a email %s\n", userID, req.TargetEmail)
+		fmt.Printf("[FRIENDS DEBUG] Friend request from userID %d to email %s\n", userID, req.TargetEmail)
 
 		// Verifica che l'email target esista
 		targetUserID, err := h.userRepo.GetUserIDByEmail(req.TargetEmail)
@@ -118,7 +118,8 @@ func (h *FriendHandler) SendFriendRequestHandler() http.HandlerFunc {
 		// Crea notifica per il destinatario
 		h.createFriendRequestNotification(userID, targetUserID)
 
-		fmt.Printf("[FRIENDS SUCCESS] ✅ Richiesta inviata con successo da %d a %d\n", userID, targetUserID)
+		fmt.Printf("[FRIENDS SUCCESS] Friend request successfully sent from %d to %d\n", userID, targetUserID)
+
 
 		response := FriendResponse{
 			Success: true,
@@ -145,7 +146,7 @@ func (h *FriendHandler) AcceptFriendRequestHandler() http.HandlerFunc {
 			return
 		}
 
-		requestID, err := strconv.ParseInt(requestIDStr, 10, 64)
+		requestID, err := strconv.ParseInt(requestIDStr, 10, 64) //numero decimale covertita in un intero a 64 bit.
 		if err != nil {
 			http.Error(w, "request_id non valido", http.StatusBadRequest)
 			return
@@ -427,7 +428,7 @@ func (h *FriendHandler) SearchUsersHandler() http.HandlerFunc {
 			return
 		}
 
-		searchTerm := r.URL.Query().Get("q")
+		searchTerm := r.URL.Query().Get("q") //friends/search?q=mario
 		if searchTerm == "" {
 			http.Error(w, "Termine di ricerca mancante", http.StatusBadRequest)
 			return
@@ -456,23 +457,23 @@ func (h *FriendHandler) createFriendRequestNotification(senderID, receiverID int
 	// Ottieni le informazioni del mittente
 	senderProfile, err := h.userRepo.GetUserProfile(fmt.Sprintf("%d", senderID))
 	if err != nil {
-		fmt.Printf("[FRIENDS WARNING] Impossibile ottenere profilo mittente: %v\n", err)
+		fmt.Printf("[FRIENDS WARNING] Unable to get sender profile: %v\n", err)
 		return
 	}
 
 	// Ottieni l'ID della richiesta appena creata
 	requestID, err := h.friendRepo.GetLatestFriendRequestID(senderID, receiverID)
 	if err != nil {
-		fmt.Printf("[FRIENDS WARNING] Impossibile ottenere ID richiesta: %v\n", err)
+		fmt.Printf("[FRIENDS WARNING] Unable to get request ID: %v\n", err)
 		return
 	}
 
 	// Crea la notifica
 	notifErr := h.notificationRepo.CreateFriendRequestNotification(receiverID, senderID, requestID, senderProfile.Username)
 	if notifErr != nil {
-		fmt.Printf("[FRIENDS WARNING] Errore creazione notifica: %v\n", notifErr)
+		fmt.Printf("[FRIENDS WARNING] Error creating notification: %v\n", notifErr)
 	} else {
-		fmt.Printf("[FRIENDS SUCCESS] ✅ Notifica creata per richiesta amicizia da %d a %d\n", senderID, receiverID)
+		fmt.Printf("[FRIENDS SUCCESS] ✅ Notification created for friend request from %d to %d\n", senderID, receiverID)
 	}
 }
 
@@ -480,8 +481,8 @@ func (h *FriendHandler) createFriendRequestNotification(senderID, receiverID int
 func (h *FriendHandler) removeNotificationAfterAction(userID int64, notifType models.NotificationType, relatedID int64, action string) {
 	notifErr := h.notificationRepo.DeleteNotificationByRelated(userID, notifType, relatedID)
 	if notifErr != nil {
-		fmt.Printf("[FRIENDS WARNING] Errore rimozione notifica dopo %s: %v\n", action, notifErr)
+		fmt.Printf("[FRIENDS WARNING] Error removing notification after %s: %v\n", action, notifErr)
 	} else {
-		fmt.Printf("[FRIENDS SUCCESS] ✅ Notifica rimossa dopo %s richiesta %d\n", action, relatedID)
+		fmt.Printf("[FRIENDS SUCCESS] Notification removed after %s request %d\n", action, relatedID)
 	}
 }

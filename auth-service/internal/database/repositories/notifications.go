@@ -143,7 +143,7 @@ func (r *NotificationRepository) MarkNotificationAsRead(notificationID, userID i
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("notifica non trovata o non autorizzata")
+		return fmt.Errorf("notification not found or not authorized")
 	}
 
 	return nil
@@ -175,7 +175,7 @@ func (r *NotificationRepository) DeleteNotification(notificationID, userID int64
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("notifica non trovata o non autorizzata")
+		return fmt.Errorf("notification not found or not authorized")
 	}
 
 	return nil

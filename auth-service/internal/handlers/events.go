@@ -102,6 +102,8 @@ func (h *EventHandler) RemoveFavoriteHandler() http.HandlerFunc {
 // CheckFavoriteHandler controlla se un post è nei preferiti
 func (h *EventHandler) CheckFavoriteHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+
 		userID, err := middleware.GetUserIDFromSession(r, h.sm)
 		if err != nil {
 			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
@@ -115,7 +117,7 @@ func (h *EventHandler) CheckFavoriteHandler() http.HandlerFunc {
 			return
 		}
 
-		postID, err := strconv.Atoi(pathParts[len(pathParts)-1])
+		postID, err := strconv.Atoi(pathParts[len(pathParts)-1])  //Atoi sta per ASCII to integer
 		if err != nil {
 			http.Error(w, "Post ID non valido", http.StatusBadRequest)
 			return
@@ -371,7 +373,7 @@ func (h *EventHandler) SendEventInviteHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[EVENT_INVITE] Invito da userID %d a %s per evento %d\n", userID, req.FriendEmail, req.PostID)
+		fmt.Printf("[EVENT_INVITE] Invitation from userID %d to %s for event %d\n", userID, req.FriendEmail, req.PostID)
 
 		// Verifica che l'utente destinatario esista e sia amico
 		friendUserID, err := h.userRepo.GetUserIDByEmail(req.FriendEmail)
@@ -385,10 +387,7 @@ func (h *EventHandler) SendEventInviteHandler() http.HandlerFunc {
 			return
 		}
 
-		// Verifica che siano amici (assumiamo di avere accesso al friendRepo tramite eventRepo)
-		// In una implementazione reale potresti voler iniettare anche friendRepo
-		// Per ora saltiamo questa verifica per semplicità
-
+		
 		// Verifica che non ci sia già un invito pendente
 		hasInvite, err := h.eventRepo.CheckPendingEventInvite(friendUserID, req.PostID)
 		if err != nil {
@@ -408,7 +407,7 @@ func (h *EventHandler) SendEventInviteHandler() http.HandlerFunc {
 
 		// Invia l'invito
 		if err := h.eventRepo.SendEventInvite(userID, friendUserID, req.PostID, req.Message); err != nil {
-			fmt.Printf("[EVENT_INVITE] Errore nell'invio: %v\n", err)
+			fmt.Printf("[EVENT_INVITE] Error while sending: %v\n", err)
 			http.Error(w, "Errore durante l'invio dell'invito", http.StatusInternalServerError)
 			return
 		}
@@ -416,17 +415,17 @@ func (h *EventHandler) SendEventInviteHandler() http.HandlerFunc {
 		// Ottieni le informazioni del mittente per la notifica
 		senderProfile, err := h.userRepo.GetUserProfile(fmt.Sprintf("%d", userID))
 		if err != nil {
-			fmt.Printf("[EVENT_INVITE] WARNING: Impossibile ottenere profilo mittente: %v\n", err)
+			fmt.Printf("[EVENT_INVITE] WARNING: Unable to get sender profile: %v\n", err)
 		}
 
 		// Ottieni il titolo dell'evento per la notifica
-		eventTitle := "Evento sportivo"
+		eventTitle := "Evento sportivo" //fallback
 		if postDetails, err := h.eventRepo.GetPostTitleByID(req.PostID); err == nil {
 			eventTitle = postDetails
 		}
 
 		// Crea la notifica per l'invito evento
-		senderUsername := "Utente sconosciuto"
+		senderUsername := "Utente sconosciuto" //fallback
 		if err == nil {
 			senderUsername = senderProfile.Username
 		}
@@ -434,13 +433,14 @@ func (h *EventHandler) SendEventInviteHandler() http.HandlerFunc {
 		if h.notificationRepo != nil {
 			notifErr := h.notificationRepo.CreateEventInviteNotification(friendUserID, userID, int64(req.PostID), senderUsername, eventTitle)
 			if notifErr != nil {
-				fmt.Printf("[EVENT_INVITE] WARNING: Errore creazione notifica: %v\n", notifErr)
+				fmt.Printf("[EVENT_INVITE] WARNING: Error creating notification: %v\n", notifErr)
 			} else {
-				fmt.Printf("[EVENT_INVITE] ✅ Notifica creata per invito evento da %d a %d\n", userID, friendUserID)
+				fmt.Printf("[EVENT_INVITE] Notification created for event invitation from %d to %d\n", userID, friendUserID)
+
 			}
 		}
 
-		fmt.Printf("[EVENT_INVITE] ✅ Invito inviato con successo\n")
+		fmt.Printf("[EVENT_INVITE] Invitation sent successfully\n")
 
 		response := EventInviteResponse{
 			Success: true,
@@ -512,9 +512,10 @@ func (h *EventHandler) AcceptEventInviteHandler() http.HandlerFunc {
 		if getPostIDErr == nil && h.notificationRepo != nil {
 			notifErr := h.notificationRepo.DeleteNotificationByRelated(userID, models.NotificationTypeEventInvite, postID)
 			if notifErr != nil {
-				fmt.Printf("[EVENT_INVITE] WARNING: Errore rimozione notifica dopo accettazione: %v\n", notifErr)
+				fmt.Printf("[EVENT_INVITE] WARNING: Error removing notification after acceptance: %v\n", notifErr)
 			} else {
-				fmt.Printf("[EVENT_INVITE] ✅ Notifica rimossa dopo accettazione invito %d\n", inviteID)
+				fmt.Printf("[EVENT_INVITE] Notification removed after accepting invite %d\n", inviteID)
+
 			}
 		}
 
@@ -562,9 +563,10 @@ func (h *EventHandler) RejectEventInviteHandler() http.HandlerFunc {
 		if getPostIDErr == nil && h.notificationRepo != nil {
 			notifErr := h.notificationRepo.DeleteNotificationByRelated(userID, models.NotificationTypeEventInvite, postID)
 			if notifErr != nil {
-				fmt.Printf("[EVENT_INVITE] WARNING: Errore rimozione notifica dopo rifiuto: %v\n", notifErr)
+				fmt.Printf("[EVENT_INVITE] WARNING: Error removing notification after rejection: %v\n", notifErr)
 			} else {
-				fmt.Printf("[EVENT_INVITE] ✅ Notifica rimossa dopo rifiuto invito %d\n", inviteID)
+				fmt.Printf("[EVENT_INVITE] Notification removed after rejecting invite %d\n", inviteID)
+
 			}
 		}
 
@@ -599,16 +601,16 @@ func (h *EventHandler) GetAvailableFriendsForInviteHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[AVAILABLE_FRIENDS] Ricerca amici disponibili per utente %d e post %d\n", userID, postID)
+		fmt.Printf("[AVAILABLE_FRIENDS] Searching available friends for user %d and post %d\n", userID, postID)
 
 		availableFriends, err := h.eventRepo.GetAvailableFriendsForInvite(userID, postID)
 		if err != nil {
-			fmt.Printf("[AVAILABLE_FRIENDS] Errore nel recupero amici disponibili: %v\n", err)
+			fmt.Printf("[AVAILABLE_FRIENDS] Error retrieving available friends: %v\n", err)
 			http.Error(w, "Errore durante il recupero degli amici disponibili", http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Printf("[AVAILABLE_FRIENDS] Trovati %d amici disponibili per l'invito\n", len(availableFriends))
+		fmt.Printf("[AVAILABLE_FRIENDS] Found %d available friends for the invite\n", len(availableFriends))
 
 		response := map[string]interface{}{
 			"success":           true,

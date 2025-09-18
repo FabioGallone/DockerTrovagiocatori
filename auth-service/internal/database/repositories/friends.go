@@ -45,7 +45,7 @@ func (r *FriendRepository) CheckPendingFriendRequest(userID1, userID2 int64) (bo
 
 // CheckFriendship - Controlla se due utenti sono amici
 func (r *FriendRepository) CheckFriendship(userID1, userID2 int64) (bool, error) {
-	// Assicurati che user1_id < user2_id per la query
+	// user1_id < user2_id per la query
 	if userID1 > userID2 {
 		userID1, userID2 = userID2, userID1
 	}
@@ -102,7 +102,7 @@ func (r *FriendRepository) AcceptFriendRequest(requestID, receiverID int64) erro
 		return err
 	}
 
-	// Crea l'amicizia (assicurati che user1_id < user2_id)
+	// Crea l'amicizia (user1_id < user2_id)
 	user1ID, user2ID := senderID, actualReceiverID
 	if user1ID > user2ID {
 		user1ID, user2ID = user2ID, user1ID
@@ -147,7 +147,7 @@ func (r *FriendRepository) RejectFriendRequest(requestID, receiverID int64) erro
 
 // RemoveFriendship - Rimuove un'amicizia
 func (r *FriendRepository) RemoveFriendship(userID1, userID2 int64) error {
-	// Assicurati che user1_id < user2_id per la query
+	// user1_id < user2_id per la query
 	if userID1 > userID2 {
 		userID1, userID2 = userID2, userID1
 	}

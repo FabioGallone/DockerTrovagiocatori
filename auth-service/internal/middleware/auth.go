@@ -8,7 +8,7 @@ import (
 	"trovagiocatoriAuth/internal/sessions"
 )
 
-// RequireAuth middleware per verificare l'autenticazione
+// RequireAuth è un middleware per verificare l'autenticazione
 func RequireAuth(sm *sessions.SessionManager) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {

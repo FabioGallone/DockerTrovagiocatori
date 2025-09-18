@@ -94,6 +94,8 @@ func setupRoutes(
 	http.HandleFunc("/favorites/check/", eventHandler.CheckFavoriteHandler())
 	http.HandleFunc("/favorites", eventHandler.GetUserFavoritesHandler())
 
+
+
 	// ========== ENDPOINT PARTECIPAZIONE EVENTI ==========
 	http.HandleFunc("/events/join", eventHandler.JoinEventHandler())
 	http.HandleFunc("/events/leave", eventHandler.LeaveEventHandler())
@@ -129,7 +131,6 @@ func setupRoutes(
 	http.HandleFunc("/notifications/read", notificationHandler.MarkNotificationAsReadHandler())
 	http.HandleFunc("/notifications/read-all", notificationHandler.MarkAllNotificationsAsReadHandler())
 	http.HandleFunc("/notifications/delete", notificationHandler.DeleteNotificationHandler())
-	http.HandleFunc("/notifications/test", notificationHandler.NotificationTestHandler())
 
 	// ========== ENDPOINT AMMINISTRATORE ==========
 	http.HandleFunc("/admin/posts/", middleware.RequireAdmin(userRepo, sm)(adminHandler.AdminDeletePostHandler()))

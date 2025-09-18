@@ -40,8 +40,8 @@ func (h *NotificationHandler) GetNotificationsHandler() http.HandlerFunc {
 		}
 
 		// Parametri di paginazione
-		limitStr := r.URL.Query().Get("limit")
-		offsetStr := r.URL.Query().Get("offset")
+		limitStr := r.URL.Query().Get("limit") // Quanti elementi restituire per pagina
+		offsetStr := r.URL.Query().Get("offset") // Quanti elementi saltare dall'inizio
 
 		limit := 20 // Default
 		if limitStr != "" {
@@ -132,7 +132,7 @@ func (h *NotificationHandler) MarkNotificationAsReadHandler() http.HandlerFunc {
 		// Segna come letta
 		err = h.notificationRepo.MarkNotificationAsRead(notificationID, userID)
 		if err != nil {
-			if err.Error() == "notifica non trovata o non autorizzata" {
+			if err.Error() == "notification not found or not authorized" {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
@@ -203,7 +203,7 @@ func (h *NotificationHandler) DeleteNotificationHandler() http.HandlerFunc {
 		// Elimina la notifica
 		err = h.notificationRepo.DeleteNotification(notificationID, userID)
 		if err != nil {
-			if err.Error() == "notifica non trovata o non autorizzata" {
+			if err.Error() == "notification not found or not authorized" {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
@@ -222,38 +222,3 @@ func (h *NotificationHandler) DeleteNotificationHandler() http.HandlerFunc {
 	}
 }
 
-// NotificationTestHandler - Endpoint per testare le notifiche (solo per sviluppo)
-func (h *NotificationHandler) NotificationTestHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, err := middleware.GetUserIDFromSession(r, h.sm)
-		if err != nil {
-			http.Error(w, "Unauthorized: sessione non valida", http.StatusUnauthorized)
-			return
-		}
-
-		// Crea una notifica di test
-		notification := &models.Notification{
-			UserID:  userID,
-			Type:    models.NotificationTypeGeneral,
-			Title:   "Notifica di Test",
-			Message: "Questa è una notifica di test per verificare il sistema",
-			Status:  models.NotificationStatusUnread,
-		}
-
-		err = h.notificationRepo.CreateNotification(notification)
-		if err != nil {
-			http.Error(w, "Errore durante la creazione della notifica di test", http.StatusInternalServerError)
-			return
-		}
-
-		// Risposta di successo
-		response := NotificationResponse{
-			Success: true,
-			Message: "Notifica di test creata con successo",
-			Data:    notification,
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-	}
-}

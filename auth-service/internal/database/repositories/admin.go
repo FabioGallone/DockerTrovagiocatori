@@ -54,7 +54,7 @@ func (r *AdminRepository) GetAllUsers() ([]models.AdminUserInfo, error) {
 			return nil, fmt.Errorf("errore nello scan utente: %v", err)
 		}
 
-		// Per ora impostiamo valori di default per post e commenti
+		//valori di default per post e commenti
 		user.PostCreati = 0
 		user.CommentiScritti = 0
 

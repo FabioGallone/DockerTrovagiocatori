@@ -35,7 +35,7 @@ type BanResponse struct {
 	Error   string      `json:"error,omitempty"`
 }
 
-// BanUserHandler banna un utente (richiesta POST)
+// BanUserHandler banna un utente 
 func (h *BanHandler) BanUserHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[BAN] Richiesta ban utente\n")
@@ -60,16 +60,8 @@ func (h *BanHandler) BanUserHandler() http.HandlerFunc {
 			return
 		}
 
-		if banReq.Reason == "" {
-			banReq.Reason = "Ban amministrativo"
-		}
-
-		// Ottieni IP per audit
-		ipAddress := getClientIP(r)
-		userAgent := r.UserAgent()
-
-		// Esegui il ban
-		ban, err := h.banRepo.BanUser(&banReq, adminID, ipAddress, userAgent)
+		// Esegui il ban (versione pulita)
+		ban, err := h.banRepo.BanUser(&banReq, adminID) 
 		if err != nil {
 			fmt.Printf("[BAN] Errore nel ban utente %d: %v\n", banReq.UserID, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -123,7 +115,7 @@ func (h *BanHandler) UnbanUserHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[BAN] ✅ Ban rimosso per utente %d da admin %d\n", userID, adminID)
+		fmt.Printf("[BAN]  Ban removed for user %d by admin %d\n", userID, adminID)
 
 		response := BanResponse{
 			Success: true,
@@ -138,11 +130,11 @@ func (h *BanHandler) UnbanUserHandler() http.HandlerFunc {
 // GetActiveBansHandler ottiene tutti i ban attivi
 func (h *BanHandler) GetActiveBansHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("[BAN] Richiesta lista ban attivi\n")
+		fmt.Printf("[BAN] Requesting list of active bans\n")
 
 		bans, err := h.banRepo.GetAllActiveBans()
 		if err != nil {
-			fmt.Printf("[BAN] Errore recupero ban attivi: %v\n", err)
+			fmt.Printf("[BAN] Error retrieving active bans: %v\n", err)
 			http.Error(w, "Errore nel recupero dei ban attivi", http.StatusInternalServerError)
 			return
 		}
@@ -213,7 +205,7 @@ func (h *BanHandler) GetUserBanHistoryHandler() http.HandlerFunc {
 
 		history, err := h.banRepo.GetUserBanHistory(userID)
 		if err != nil {
-			fmt.Printf("[BAN] Errore recupero cronologia ban utente %d: %v\n", userID, err)
+			fmt.Printf("[BAN] Error retrieving ban history for user %d: %v\n", userID, err)
 			http.Error(w, "Errore nel recupero della cronologia", http.StatusInternalServerError)
 			return
 		}
@@ -235,7 +227,7 @@ func (h *BanHandler) GetBanStatsHandler() http.HandlerFunc {
 
 		stats, err := h.banRepo.GetBanStats()
 		if err != nil {
-			fmt.Printf("[BAN] Errore recupero statistiche: %v\n", err)
+			fmt.Printf("[BAN] Error retrieving statistics: %v\n", err)
 			http.Error(w, "Errore nel recupero delle statistiche", http.StatusInternalServerError)
 			return
 		}
