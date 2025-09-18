@@ -68,7 +68,7 @@ func (h *BanHandler) BanUserHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[BAN] ✅ Utente %d bannato con successo da admin %d\n", banReq.UserID, adminID)
+		fmt.Printf("[BAN] Utente %d bannato con successo da admin %d\n", banReq.UserID, adminID)
 
 		// Risposta di successo
 		response := BanResponse{

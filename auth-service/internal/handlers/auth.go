@@ -210,7 +210,7 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 		}
 
 		// Crea sessione
-		fmt.Printf("[LOGIN] ✅ Checks passed, creating session for userID: %d\n", userID)
+		fmt.Printf("[LOGIN] Checks passed, creating session for userID: %d\n", userID)
 
 		sessionID, err := h.sm.CreateSession(userID)
 		if err != nil {
@@ -226,7 +226,7 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 			Path:  "/",
 		})
 
-		fmt.Printf("[LOGIN] ✅ Login successfully completed for userID %d, SessionID: %s\n", userID, sessionID)
+		fmt.Printf("[LOGIN] Login successfully completed for userID %d, SessionID: %s\n", userID, sessionID)
 
 		response := LoginResponse{
 			Success: true,
