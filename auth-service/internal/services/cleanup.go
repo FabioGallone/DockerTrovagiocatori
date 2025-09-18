@@ -42,7 +42,8 @@ func (ncs *NotificationCleanupService) Start() {
 		}
 	}()
 
-	log.Println("🧹 Servizio pulizia notifiche avviato (ogni ora)")
+	log.Println("Notification cleanup service started (every hour)")
+
 }
 
 // Stop ferma il servizio di pulizia
@@ -51,7 +52,8 @@ func (ncs *NotificationCleanupService) Stop() {
 		ncs.ticker.Stop()
 	}
 	ncs.done <- true
-	log.Println("🛑 Servizio pulizia notifiche fermato")
+	log.Println("Notification cleanup service stopped")
+
 }
 
 // cleanupExpiredNotifications pulisce le notifiche scadute
@@ -60,25 +62,13 @@ func (ncs *NotificationCleanupService) cleanupExpiredNotifications() {
 	
 	err := ncs.notificationRepo.DeleteExpiredNotifications()
 	if err != nil {
-		log.Printf("❌ Errore durante la pulizia delle notifiche scadute: %v", err)
+		log.Printf("Error while cleaning up expired notifications: %v", err)
+
 		return
 	}
 
 	duration := time.Since(startTime)
-	log.Printf("✅ Pulizia notifiche scadute completata in %v", duration)
+	log.Printf("Expired notifications cleanup completed in %v", duration)
+
 }
 
-// PrintStats stampa le statistiche delle notifiche nei log
-func (ncs *NotificationCleanupService) PrintStats() {
-	stats, err := ncs.notificationRepo.GetNotificationStats()
-	if err != nil {
-		log.Printf("❌ Errore nel recupero statistiche notifiche: %v", err)
-		return
-	}
-
-	log.Printf("📊 STATISTICHE NOTIFICHE:")
-	log.Printf("   Total: %d | Unread: %d | Read: %d", 
-		stats["total"], stats["unread"], stats["read"])
-	log.Printf("   Friend Requests: %d | Event Invites: %d | Expired: %d", 
-		stats["friend_requests"], stats["event_invites"], stats["expired"])
-}

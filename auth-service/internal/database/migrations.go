@@ -24,7 +24,7 @@ func (db *Database) runMigrations() error {
 		}
 	}
 
-	fmt.Println("✔ All database migrations completed successfully")
+	fmt.Println("All database migrations completed successfully")
 	return nil
 }
 
@@ -52,10 +52,10 @@ func (db *Database) createUsersTable() error {
 	ON CONFLICT (email) DO UPDATE SET is_admin = TRUE;
 	`)
 	if err != nil {
-		return fmt.Errorf("errore nell'inserimento dell'admin: %v", err)
+		return fmt.Errorf("Errore nell'inserimento dell'admin: %v", err)
 	}
 
-	log.Println("✔ Users table created and admin user initialized")
+	log.Println("Users table created and admin user initialized")
 	return nil
 }
 

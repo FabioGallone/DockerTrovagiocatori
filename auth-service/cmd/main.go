@@ -40,8 +40,6 @@ func main() {
 	cleanupService.Start()
 	defer cleanupService.Stop()
 
-	// Stampa statistiche iniziali delle notifiche
-	cleanupService.PrintStats()
 
 	// Inizializza gli handlers
 	authHandler := handlers.NewAuthHandler(userRepo, banRepo, sm)
@@ -55,12 +53,12 @@ func main() {
 	setupRoutes(authHandler, friendHandler, eventHandler, notificationHandler, adminHandler, banHandler, userRepo, sm)
 
 	// Stampa messaggi di avvio
-	log.Println("🔔 Sistema notifiche attivato!")
-	log.Println("🤝 Sistema amici configurato!")
-	log.Println("🎉 Sistema inviti eventi configurato!")
-	log.Println("🔧 Endpoint amministratore configurati!")
-	log.Println("🚫 Sistema ban utenti attivato!")
-	log.Printf("🚀 Auth service running on port %s", cfg.Server.Port)
+	log.Println("Notification system activated!")
+	log.Println("Friends system configured!")
+	log.Println("Event invitations system configured!")
+	log.Println("Admin endpoint configured!")
+	log.Println("User ban system activated!")
+	log.Printf("Auth service running on port %s", cfg.Server.Port)
 
 	// Avvia il server
 	if err := http.ListenAndServe(":"+cfg.Server.Port, nil); err != nil {

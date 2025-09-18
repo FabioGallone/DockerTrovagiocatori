@@ -15,6 +15,7 @@ type Database struct {
 
 func NewDatabase(cfg *config.Config) (*Database, error) {
 	db, err := sql.Open("postgres", cfg.GetDSN())
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -33,7 +34,7 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	fmt.Println("✔ Database connected successfully")
+	fmt.Println("Database connected successfully")
 	return database, nil
 }
 

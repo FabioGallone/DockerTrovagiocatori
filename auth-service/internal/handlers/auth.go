@@ -73,7 +73,7 @@ func (h *AuthHandler) RegisterHandler() http.HandlerFunc {
 		// Hash della password
 		hashedPassword, err := utils.HashPassword(password)
 		if err != nil {
-			http.Error(w, "Errore durante l'hashing della password", http.StatusInternalServerError)
+			http.Error(w, "Error hashing the password", http.StatusInternalServerError)
 			return
 		}
 
@@ -86,7 +86,7 @@ func (h *AuthHandler) RegisterHandler() http.HandlerFunc {
 			uploadDir := "uploads/profile_pictures"
 			if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
 				if mkdirErr := os.MkdirAll(uploadDir, os.ModePerm); mkdirErr != nil {
-					http.Error(w, fmt.Sprintf("Errore nella creazione della directory: %v", mkdirErr), http.StatusInternalServerError)
+					http.Error(w, fmt.Sprintf("Error creating the directory: %v", mkdirErr), http.StatusInternalServerError)
 					return
 				}
 			}
@@ -97,17 +97,18 @@ func (h *AuthHandler) RegisterHandler() http.HandlerFunc {
 
 			outFile, err := os.Create(filePath)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Errore nella creazione del file: %v", err), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("Error creating the file: %v", err), http.StatusInternalServerError)
 				return
 			}
 			defer outFile.Close()
 
 			_, err = io.Copy(outFile, file)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Errore nella scrittura del file: %v", err), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("Error writing the file: %v", err), http.StatusInternalServerError)
 				return
 			}
-			fmt.Printf("✔ Immagine salvata con successo: %s\n", filePath)
+			fmt.Printf(" Image successfully saved: %s\n", filePath)
+
 		}
 
 		newUser := models.User{
@@ -130,11 +131,11 @@ func (h *AuthHandler) RegisterHandler() http.HandlerFunc {
 		http.SetCookie(w, &http.Cookie{
 			Name:  "session_id",
 			Value: sessionID,
-			Path:  "/",
+			Path:  "/", //il cookie è valido per tutto il dominio e tutti i percorsi del sito.
 		})
 
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{
+		json.NewEncoder(w).Encode(map[string]string{  //encode prende un oggetto in go e lo converte in json
 			"message":         "Registrazione completata con successo",
 			"profile_picture": profilePictureFilename,
 		})
@@ -143,9 +144,10 @@ func (h *AuthHandler) RegisterHandler() http.HandlerFunc {
 
 // LoginHandler gestisce il login degli utenti con controllo ban
 func (h *AuthHandler) LoginHandler() http.HandlerFunc {
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		var loginData LoginRequest
-		err := json.NewDecoder(r.Body).Decode(&loginData)
+		err := json.NewDecoder(r.Body).Decode(&loginData) //decoder legge JSON e trasforma in dati Go
 		if err != nil {
 			h.respondWithError(w, "Dati non validi", http.StatusBadRequest)
 			return
@@ -172,7 +174,7 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 		}
 
 		if isBanned && banInfo != nil {
-			fmt.Printf("[LOGIN] ❌ Accesso negato - Utente %d è bannato: %s\n", userID, banInfo.Reason)
+			fmt.Printf("[LOGIN] Access denied - User %d is banned: %s\n", userID, banInfo.Reason)
 
 			banResponse := &BanInfo{
 				Reason:   banInfo.Reason,
