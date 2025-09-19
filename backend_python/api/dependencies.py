@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def get_current_user_email(request: Request) -> str:
-    """Ottieni l'email dell'utente autenticato dall'auth service"""
+    "Ottieni l'email dell'utente autenticato dall'auth service"
     session_cookie = request.cookies.get("session_id")
     
     if not session_cookie:
@@ -28,7 +28,7 @@ def get_current_user_email(request: Request) -> str:
         raise HTTPException(status_code=500, detail="Auth service unavailable")
 
 def verify_admin_user(request: Request) -> str:
-    """Verifica che l'utente sia un amministratore"""
+    "Verifica che l'utente sia un amministratore"
     try:
         user_email = get_current_user_email(request)
         

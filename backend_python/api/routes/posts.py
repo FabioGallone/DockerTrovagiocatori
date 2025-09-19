@@ -98,7 +98,7 @@ def search_posts(provincia: str, sport: str, livello: str = None, db: Session = 
 
 @router.get("/{post_id}", response_model=PostResponse)
 def get_post(post_id: int, db: Session = Depends(get_db)):
-    """Ottieni un post specifico"""
+    "Ottieni un post specifico"
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post non trovato")
@@ -135,7 +135,7 @@ def get_post_participants_count(post_id: int):
 
 @router.get("/{post_id}/availability")
 def get_post_availability(post_id: int, db: Session = Depends(get_db)):
-    """Calcola i posti disponibili per un evento"""
+    "Calcola i posti disponibili per un evento"
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post non trovato")
@@ -154,7 +154,7 @@ def get_post_availability(post_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{post_id}/details")
 def get_post_with_participants(post_id: int, db: Session = Depends(get_db)):
-    """Ottieni un post specifico con informazioni sui partecipanti"""
+    "Ottieni un post specifico con informazioni sui partecipanti"
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post non trovato")

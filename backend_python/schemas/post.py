@@ -16,7 +16,9 @@ class PostCreate(BaseModel):
     livello: str = "Intermedio"
     numero_giocatori: int = 1
 
-    @validator('numero_giocatori')
+    #cls è la classe PostCreate
+    
+    @validator('numero_giocatori') 
     def validate_numero_giocatori(cls, v):
         if v < 1 or v > 50:
             raise ValueError('Il numero di giocatori deve essere tra 1 e 50')

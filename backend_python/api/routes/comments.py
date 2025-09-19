@@ -15,7 +15,7 @@ router = APIRouter(prefix="/posts", tags=["Commenti"])
 
 @router.post("/{post_id}/comments/", response_model=CommentResponse)
 def create_comment(post_id: int, comment: CommentCreate, request: Request, db: Session = Depends(get_db)):
-    """Aggiungi un commento a un post"""
+    "Aggiungi un commento a un post"
     # Verifica che il post esista
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
@@ -38,9 +38,10 @@ def create_comment(post_id: int, comment: CommentCreate, request: Request, db: S
     logger.info(f"Commento creato da {user_email} per post {post_id}")
     return new_comment
 
+
 @router.get("/{post_id}/comments/", response_model=List[CommentResponse])
 def get_post_comments(post_id: int, db: Session = Depends(get_db)):
-    """Ottieni tutti i commenti di un post con info utente"""
+    "Ottieni tutti i commenti di un post con info utente"
     # Verifica che il post esista
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:

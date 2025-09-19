@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def load_sport_fields(db: Session) -> None:
-    """Carica i campi sportivi dal file JSON nel database"""
+    "Carica i campi sportivi dal file JSON nel database"
     try:
         # Controlla se ci sono già campi nel database
         existing_fields = db.query(SportField).first()

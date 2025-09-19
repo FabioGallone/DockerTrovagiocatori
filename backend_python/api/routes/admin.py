@@ -15,7 +15,7 @@ router = APIRouter(prefix="/admin", tags=["Amministrazione"])
 
 @router.delete("/posts/{post_id}")
 def delete_post(post_id: int, request: Request, db: Session = Depends(get_db)):
-    """Elimina un post (solo amministratori)"""
+    "Elimina un post (solo amministratori)"
     admin_email = verify_admin_user(request)
     
     # Trova il post
@@ -39,7 +39,7 @@ def delete_post(post_id: int, request: Request, db: Session = Depends(get_db)):
 
 @router.delete("/comments/{comment_id}")
 def delete_comment(comment_id: int, request: Request, db: Session = Depends(get_db)):
-    """Elimina un commento (solo amministratori)"""
+    "Elimina un commento (solo amministratori)"
     admin_email = verify_admin_user(request)
     
     # Trova il commento
@@ -63,7 +63,7 @@ def delete_comment(comment_id: int, request: Request, db: Session = Depends(get_
 
 @router.get("/posts/by-user/{user_email}")
 def get_posts_by_user_admin(user_email: str, request: Request, db: Session = Depends(get_db)):
-    """Ottieni post di un utente specifico (admin)"""
+    "Ottieni post di un utente specifico (admin)"
     verify_admin_user(request)
     
     try:
@@ -96,7 +96,7 @@ def get_posts_by_user_admin(user_email: str, request: Request, db: Session = Dep
 
 @router.get("/posts")
 def get_all_posts_for_admin(request: Request, db: Session = Depends(get_db)):
-    """Ottiene tutti i post per il pannello admin"""
+    "Ottiene tutti i post per il pannello admin"
     try:
         verify_admin_user(request)
         
@@ -136,7 +136,7 @@ def get_all_posts_for_admin(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/comments")
 def get_all_comments_for_admin(request: Request, db: Session = Depends(get_db)):
-    """Ottiene tutti i commenti per il pannello admin"""
+    "Ottiene tutti i commenti per il pannello admin"
     try:
         verify_admin_user(request)
         
@@ -165,7 +165,7 @@ def get_all_comments_for_admin(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/stats")
 def get_admin_stats(request: Request, db: Session = Depends(get_db)):
-    """Statistiche dettagliate per amministratori"""
+    "Statistiche dettagliate per amministratori"
     verify_admin_user(request)
     
     try:

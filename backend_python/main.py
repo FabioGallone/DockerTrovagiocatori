@@ -28,7 +28,8 @@ app.include_router(admin.router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Inizializzazione dell'applicazione"""
+    "Inizializzazione dell'applicazione"
+
     # Carica i campi sportivi
     db = next(get_db())
     try:
@@ -43,7 +44,7 @@ async def startup_event():
 
 @app.get("/")
 def root():
-    """Endpoint di base per verificare che l'API sia attiva"""
+    "Endpoint di base per verificare che l'API sia attiva"
     return {"message": "TrovaGiocatori API è attiva!", "status": "OK"}
 
 @app.get("/ws/test")

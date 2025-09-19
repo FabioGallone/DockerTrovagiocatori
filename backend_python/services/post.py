@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def get_participants_count(post_id: int) -> int:
-    """Ottiene il numero di partecipanti per un evento"""
+    "Ottiene il numero di partecipanti per un evento"
     try:
         response = requests.get(
             f"{settings.AUTH_SERVICE_URL}/events/{post_id}/participants", 
@@ -20,7 +20,7 @@ def get_participants_count(post_id: int) -> int:
         return 0
 
 def enrich_post_with_participants(post) -> dict:
-    """Arricchisce un post con informazioni sui partecipanti"""
+    "Arricchisce un post con informazioni sui partecipanti"
     participants_count = get_participants_count(post.id)
     posti_disponibili = max(0, post.numero_giocatori - participants_count)
     

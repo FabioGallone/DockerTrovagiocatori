@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 connected_users: Dict[str, Dict] = {}
 
 async def get_user_info_from_auth_service(session_cookie: str) -> Dict:
-    """Ottiene le informazioni dell'utente dall'auth service"""
+    "Ottiene le informazioni dell'utente dall'auth service"
     try:
         response = requests.get(
             f"{settings.AUTH_SERVICE_URL}/api/user",
@@ -30,7 +30,7 @@ async def get_user_info_from_auth_service(session_cookie: str) -> Dict:
         return None
 
 def save_message_to_database(sender_email: str, recipient_email: str, content: str, chat_type: str = "friend") -> int:
-    """Salva il messaggio nel database"""
+    "Salva il messaggio nel database"
     db = SessionLocal()
     try:
         chat_message = ChatMessage(
@@ -53,7 +53,7 @@ def save_message_to_database(sender_email: str, recipient_email: str, content: s
         db.close()
 
 def get_chat_history(user_email1: str, user_email2: str, limit: int = 50) -> List[Dict]:
-    """Recupera la cronologia chat tra due utenti"""
+    "Recupera la cronologia chat tra due utenti"
     db = SessionLocal()
     try:
         messages = db.query(ChatMessage).filter(
@@ -82,7 +82,7 @@ def get_chat_history(user_email1: str, user_email2: str, limit: int = 50) -> Lis
 
 @sio.event
 async def connect(sid, environ, auth):
-    """Gestisce la connessione di un nuovo utente"""
+    "Gestisce la connessione di un nuovo utente"
     try:
         logger.info(f"Tentativo di connessione per sid: {sid}")
         
@@ -146,7 +146,7 @@ async def connect(sid, environ, auth):
 
 @sio.event
 async def disconnect(sid):
-    """Gestisce la disconnessione di un utente"""
+    "Gestisce la disconnessione di un utente"
     try:
         session = await sio.get_session(sid)
         if session:
@@ -167,7 +167,7 @@ async def disconnect(sid):
 
 @sio.event
 async def join_chat(sid, data):
-    """Un utente vuole iniziare/partecipare a una chat con un altro utente"""
+    "Un utente vuole iniziare/partecipare a una chat con un altro utente"
     try:
         session = await sio.get_session(sid)
         if not session:
@@ -202,7 +202,7 @@ async def join_chat(sid, data):
 
 @sio.event
 async def send_private_message(sid, data):
-    """Invia un messaggio privato"""
+    "Invia un messaggio privato"
     try:
         session = await sio.get_session(sid)
         if not session:
@@ -211,7 +211,7 @@ async def send_private_message(sid, data):
         
         user_email = session['user_email']
         recipient_email = data['recipient_email']
-        message_content = data['message'].strip()
+        message_content = data['message'].strip() #rimuove spazi bianchi all’inizio e alla fine della stringa
         
         if not message_content:
             await sio.emit('error', {'message': 'Messaggio vuoto'}, room=sid)
@@ -257,7 +257,7 @@ async def send_private_message(sid, data):
 
 @sio.event
 async def typing_start(sid, data):
-    """Notifica che l'utente sta scrivendo"""
+    "Notifica che l'utente sta scrivendo"
     try:
         session = await sio.get_session(sid)
         if not session:
@@ -281,7 +281,7 @@ async def typing_start(sid, data):
 
 @sio.event
 async def typing_stop(sid, data):
-    """Notifica che l'utente ha smesso di scrivere"""
+    "Notifica che l'utente ha smesso di scrivere"
     try:
         session = await sio.get_session(sid)
         if not session:
@@ -305,7 +305,7 @@ async def typing_stop(sid, data):
 
 @sio.event
 async def get_online_users(sid):
-    """Restituisce la lista degli utenti online"""
+    "Restituisce la lista degli utenti online"
     try:
         online_users = [
             {
@@ -329,7 +329,7 @@ async def get_online_users(sid):
 
 @sio.event
 async def ping(sid):
-    """Risponde al ping del client"""
+    "Risponde al ping del client"
     try:
         await sio.emit('pong', {'timestamp': datetime.utcnow().isoformat()}, room=sid)
     except Exception as e:
