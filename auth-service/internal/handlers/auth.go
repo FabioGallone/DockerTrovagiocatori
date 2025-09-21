@@ -163,7 +163,7 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[LOGIN] Credenziali valide per userID: %d\n", userID)
+		fmt.Printf("[LOGIN] Valid credentials for userID: %d\n", userID)
 
 		// Controllo ban
 		isBanned, banInfo, err := h.banRepo.IsUserBanned(userID)
