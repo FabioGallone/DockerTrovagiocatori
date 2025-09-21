@@ -19,4 +19,5 @@ COPY campi.json .
 EXPOSE 8000
 
 # Avvia il server usando Uvicorn (che è il server per FastAPI)
+# Serve per eseguire l’app Python e gestire le richieste HTTP.
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
