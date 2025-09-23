@@ -60,7 +60,7 @@ func (h *BanHandler) BanUserHandler() http.HandlerFunc {
 			return
 		}
 
-		// Esegui il ban (versione pulita)
+		// Esegui il ban
 		ban, err := h.banRepo.BanUser(&banReq, adminID) 
 		if err != nil {
 			fmt.Printf("[BAN] Errore nel ban utente %d: %v\n", banReq.UserID, err)

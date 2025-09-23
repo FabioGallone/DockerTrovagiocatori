@@ -113,7 +113,7 @@ func (h *AdminHandler) AdminDeleteCommentHandler() http.HandlerFunc {
 
 		fmt.Printf("[ADMIN] Attempting to delete comment %d\n", commentID)
 
-		// Chiama il backend Python per eliminare il commento
+	
 		pythonURL := "http://backend_python:8000/admin/comments/" + strconv.Itoa(commentID)
 
 		cookie, _ := r.Cookie("session_id")
@@ -321,7 +321,7 @@ func (h *AdminHandler) AdminStatsHandler() http.HandlerFunc {
 			"generated_at":       time.Now().Format("2006-01-02 15:04:05"),
 		}
 
-		fmt.Printf("[ADMIN] ✅ Statistics generated: %+v\n", stats)
+		fmt.Printf("[ADMIN] Statistics generated: %+v\n", stats)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(stats)
