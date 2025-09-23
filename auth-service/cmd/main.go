@@ -52,13 +52,7 @@ func main() {
 	// Setup routes
 	setupRoutes(authHandler, friendHandler, eventHandler, notificationHandler, adminHandler, banHandler, userRepo, sm)
 
-	// Stampa messaggi di avvio
-	log.Println("Notification system activated!")
-	log.Println("Friends system configured!")
-	log.Println("Event invitations system configured!")
-	log.Println("Admin endpoint configured!")
-	log.Println("User ban system activated!")
-	log.Printf("Auth service running on port %s", cfg.Server.Port)
+
 
 	// Avvia il server
 	if err := http.ListenAndServe(":"+cfg.Server.Port, nil); err != nil {
