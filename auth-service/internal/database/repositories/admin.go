@@ -89,7 +89,7 @@ func (r *AdminRepository) ToggleUserStatus(userID int64) (bool, error) {
 		return false, fmt.Errorf("errore nell'aggiornamento status utente: %v", err)
 	}
 
-	fmt.Printf("[DB] ✅ Status utente %d cambiato da %t a %t\n", userID, currentStatus, newStatus)
+	fmt.Printf("[DB] Status utente %d cambiato da %t a %t\n", userID, currentStatus, newStatus)
 	return newStatus, nil
 }
 

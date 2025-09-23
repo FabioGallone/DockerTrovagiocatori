@@ -73,7 +73,7 @@ func (db *Database) createFavoritesTable() error {
 		return fmt.Errorf("errore nella creazione della tabella user_favorites: %v", err)
 	}
 
-	log.Println("✔ User favorites table created")
+	log.Println("User favorites table created")
 	return nil
 }
 
@@ -92,7 +92,7 @@ func (db *Database) createEventParticipantsTable() error {
 		return fmt.Errorf("errore nella creazione della tabella event_participants: %v", err)
 	}
 
-	log.Println("✔ Event participants table created")
+	log.Println("Event participants table created")
 	return nil
 }
 
@@ -147,7 +147,7 @@ func (db *Database) createFriendsTablesIfNotExists() error {
 		}
 	}
 
-	log.Println("✔ Friends tables created successfully")
+	log.Println("Friends tables created successfully")
 	return nil
 }
 
@@ -186,7 +186,7 @@ func (db *Database) createEventInvitesTableIfNotExists() error {
 		}
 	}
 
-	log.Println("✔ Event invites table created successfully")
+	log.Println("Event invites table created successfully")
 	return nil
 }
 
@@ -228,7 +228,7 @@ func (db *Database) createNotificationsTableIfNotExists() error {
 		}
 	}
 
-	log.Println("✔ Notifications table created successfully")
+	log.Println("Notifications table created successfully")
 	return nil
 }
 
@@ -277,7 +277,7 @@ func (db *Database) createBanTablesIfNotExists() error {
 		db.Conn.Exec(query)
 	}
 
-	log.Println("✔ Ban tables created successfully")
+	log.Println("Ban tables created successfully")
 	return nil
 }
 
@@ -306,6 +306,6 @@ func (db *Database) updateUsersTableWithAdminFields() error {
 		return fmt.Errorf("errore nell'aggiornamento created_at: %v", err)
 	}
 
-	log.Println("✔ Users table updated with admin fields")
+	log.Println("Users table updated with admin fields")
 	return nil
 }

@@ -222,7 +222,7 @@ func (h *AdminHandler) AdminToggleUserStatusHandler() http.HandlerFunc {
 				return
 			}
 
-			fmt.Printf("[ADMIN] ✅ Utente %d sbannato con successo\n", targetUserID)
+			fmt.Printf("[ADMIN] Utente %d sbannato con successo\n", targetUserID)
 
 			response := map[string]interface{}{
 				"success":    true,

@@ -204,7 +204,7 @@ func (h *AuthHandler) LoginHandler() http.HandlerFunc {
 		}
 
 		if !isActive {
-			fmt.Printf("[LOGIN] ❌ Access denied - User %d is not active\n", userID)
+			fmt.Printf("[LOGIN] Access denied - User %d is not active\n", userID)
 			h.respondWithError(w, "Account non attivo. Contatta l'amministratore.", http.StatusForbidden)
 			return
 		}

@@ -473,7 +473,7 @@ func (h *FriendHandler) createFriendRequestNotification(senderID, receiverID int
 	if notifErr != nil {
 		fmt.Printf("[FRIENDS WARNING] Error creating notification: %v\n", notifErr)
 	} else {
-		fmt.Printf("[FRIENDS SUCCESS] ✅ Notification created for friend request from %d to %d\n", senderID, receiverID)
+		fmt.Printf("[FRIENDS SUCCESS] Notification created for friend request from %d to %d\n", senderID, receiverID)
 	}
 }
 
