@@ -74,15 +74,13 @@ def get_posts_by_user(request: Request, db: Session = Depends(get_db)):
     return enriched_posts
 
 @router.get("/search")
-def search_posts(provincia: str, sport: str, livello: str = None, db: Session = Depends(get_db)):
+def search_posts(provincia: str, sport: str, db: Session = Depends(get_db)):
     """Cerca post per provincia, sport e opzionalmente per livello"""
     query = db.query(Post).filter(
         Post.provincia == provincia, 
         Post.sport == sport
     )
-    
-    if livello:
-        query = query.filter(Post.livello == livello)
+   
     
     posts = query.all()
     
@@ -111,17 +109,19 @@ def get_post_participants_count(post_id: int):
         response = requests.get(f"{settings.AUTH_SERVICE_URL}/events/{post_id}/participants", timeout=5)
         if response.status_code == 200:
             data = response.json()
+            participants = data.get("participants", [])
+            
             return {
                 "success": True,
                 "post_id": post_id,
-                "participants_count": data.get("count", 0),
-                "participants": data.get("participants", [])
+                "count": len(participants), 
+                "participants": participants
             }
         else:
             return {
                 "success": False,
                 "post_id": post_id,
-                "participants_count": 0,
+                "count": 0,  
                 "participants": []
             }
     except Exception as e:
@@ -129,7 +129,7 @@ def get_post_participants_count(post_id: int):
         return {
             "success": False,
             "post_id": post_id,
-            "participants_count": 0,
+            "count": 0,  
             "participants": []
         }
 
